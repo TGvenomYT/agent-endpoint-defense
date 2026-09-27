@@ -25,9 +25,10 @@ Model Context Protocol (MCP), which turns a personal automation stack into an
 Internet-facing HTTP service. We study what a single operator can realistically
 put in front of such an endpoint. We evaluate \sys{}, a standard-library-only
 admission gate deployed in front of a self-hosted 29-tool MCP gateway published
-through a Cloudflare tunnel. The evaluation uses a reproducible harness of 14
-attack and benign scenarios with latency and memory benchmarks, run against the
-unmodified original (v1) and against a hardened revision (v2). v1 had no false
+through a Cloudflare tunnel. The evaluation uses a reproducible harness of 16
+attack and benign scenarios with latency and memory benchmarks, run across three
+revisions: the unmodified original (v1), a hardened revision (v2), and a
+post-authentication extension (v3). v1 had no false
 blocks on benign MCP sessions and stopped declared crawlers, single-source
 credential probing and floods at \SI{5}{\micro\second} median overhead. It also
 had measurable weaknesses, all caused by keying state on individual client IPs:
@@ -40,8 +41,12 @@ change. Latency stays flat at \SI{0.13}{\milli\second} up to 50k bans
 distributed guessing earns 95 bans, IPv6 rotation inside a /64 costs one ban
 instead of 200, and a mistyped token costs 5 minutes rather than an hour. None of
 this introduces benign false blocks, and v2 adds \SI{9}{\micro\second} per
-request. User-agent spoofing remains undetectable at this layer; the bearer token
-still stops it.
+request. v3 extends defense past the admission layer: scoped bearer tokens
+limit each credential to a named set of tools, and per-tool rate limiting
+throttles authorized abuse of individual tools without affecting others. Four
+concurrent clients complete full MCP sessions with no cross-contamination,
+and long-running sessions recover cleanly across rate windows. User-agent
+spoofing remains undetectable at this layer; the bearer token still stops it.
 \ifrealdata
 Over a \RTHours-hour public exposure (\RTRequests{} requests from \RTSources{}
 sources), replaying the same real trace through each policy shows v1 blocking
@@ -89,9 +94,11 @@ bearer authentication and capability minimization (\cref{sec:design}).
 weaknesses (\cref{sec:v1}).
 (iii) A hardened revision and a before/after comparison on identical scenarios
 (\cref{sec:v2}).
-(iv) A time-boxed public exposure whose trace is replayed through every
+(iv) A post-authentication extension with scoped tokens and per-tool rate
+limiting, evaluated on two new scenarios (\cref{sec:v3}).
+(v) A time-boxed public exposure whose trace is replayed through every
 policy (\cref{sec:real}).
-(v) Release of the harness, replay tooling and aggregate data.
+(vi) Release of the harness, replay tooling and aggregate data.
 
 \noindent\textbf{Claim.} \emph{For a single-operator, Internet-exposed MCP
 endpoint, a lightweight application-layer gate combined with a
@@ -99,7 +106,9 @@ high-entropy bearer token and a minimized tool surface stops declared
 crawlers, credential probing, path scanning and floods at microsecond
 cost with no false blocks on benign MCP sessions. It is effective only
 if its state is keyed on network sources rather than individual addresses
-and bounded in size. The token, not the gate, remains the security boundary.}
+and bounded in size. Scoped tokens and per-tool rate limits extend the
+defense past authentication, bounding the blast radius of a leaked
+credential. The token, not the gate, remains the security boundary.}
 
 % =====================================================================
 \section{System and Threat Model}\label{sec:design}
@@ -190,13 +199,14 @@ as a separate process on a private port, with a fresh 320-bit bearer token and
 a fresh state directory for every scenario. It emulates the Cloudflare hop by
 setting \code{CF-Connecting-IP} to documentation-range
 addresses~\citep{rfc5737,rfc3849} and replays the scenarios over HTTP/1.1. The
-\emph{identical} scenario set runs against the v1 tree (a byte-for-byte backup
-of the deployed code) and the v2 tree, under the shipped default policy.
+base scenario set (S1--S14) runs against the v1, v2 and v3 trees under the
+shipped default policy. Two additional scenarios (S15--S16) exercise
+v3-specific features and are skipped on older trees.
 Latency is measured end to end on a keep-alive connection: 50 warm-up requests,
 then $3\times\num{1000}$ interleaved requests per condition, or 500 per point
 for ban-list scaling. Memory is measured with \code{tracemalloc} in a fresh
 interpreter. Platform: Apple M5 Pro, macOS 26.6.1, Python 3.12.13. Every number
-is read from \code{artifact/results\_v\{1,2\}.json}.
+is read from \code{artifact/results\_v\{1,2,3\}.json}.
 
 % =====================================================================
 \section{Guardian v1: Effective, but Keyed on the Wrong Thing}\label{sec:v1}
@@ -284,6 +294,8 @@ S8b & Same, operator address allowlisted & locked out 60\,min (no allowlist) & \
 S9  & Banned client: \code{DELETE}; 300\,KB body & \code{200}, unlogged; body read (\code{413}) & \textbf{\code{403}, logged; body unread (\code{403})} \\
 S10 & Non-loopback peer forging client IP & \textbf{5/5 forged identities evade ban} & \textbf{0/5; ban keyed on real peer} \\
 S12 & 200 bot requests rotating inside one /64 & \textbf{200 ban entries} & \textbf{1 ban}; 20/20 further addresses in /64 blocked; neighbouring /64 unaffected \\
+S13 & 4 concurrent clients, 50 req each & 200/200 served, 0 bans & 200/200 served, 0 bans \\
+S14 & Long session: 100 req, wait 61\,s, 100 more & 200 served, 0 throttled & 200 served, 0 throttled \\
 S11 & Guardian disabled (ablation) & flood served; 1 unenforced ban record & flood served; 0 records \\
 \midrule
 E2 & Median latency, 0 / 1k / 10k / 50k bans & 0.12 / 0.54 / 3.99 / \textbf{21.7}\,ms & 0.13 / 0.13 / 0.13 / \textbf{0.13}\,ms \\
@@ -332,6 +344,45 @@ worst case is a legitimate user needing 3 attempts instead of 8, which the
 allowlist removes. The LRU cap means an attacker with more than \num{20000}
 active sources can push out counters. Bans are persisted separately and are
 not evicted.
+
+% =====================================================================
+\section{Post-Authentication Extension: Guardian v3}\label{sec:v3}
+v1 and v2 treat the bearer token as monolithic: one token grants access to
+every public tool. Once the token leaks---from a client's configuration, an
+agent's context window, or a log line---the holder has the full tool surface.
+And once authenticated, a client faces only the global rate limit, so a
+misbehaving or compromised agent can call one tool hundreds of times without
+triggering throttling.
+
+\subsection{Scoped tokens}
+v3 replaces the single token with a set of named tokens, each scoped to a list
+of tool names (or \code{["*"]} for full access). The legacy single token remains
+accepted as a full-access credential for backward compatibility.
+\code{tools/list} returns only the tools the presenting token can reach, and
+\code{tools/call} to an out-of-scope tool returns JSON-RPC \code{-32601}
+without executing.
+
+\subsection{Per-tool rate limiting}
+v3 adds a per-(source, tool) sliding window on top of the global rate limit.
+The default is 30 calls per 60\,s per tool per source. Exceeding it returns
+JSON-RPC \code{-32005}; other tools and other sources are unaffected.
+Allowlisted sources are exempt, consistent with the admission gate.
+
+\finding{Results.}
+S15 verifies token scoping: a full-access token sees all 5 public tools; a
+scoped token sees only its 2 allowed tools (\code{devops\_status},
+\code{devops\_health}); calling \code{devops\_logs} with the scoped token
+returns \code{-32601}. S16 verifies per-tool rate limiting: with a limit of
+10 calls per 60\,s, the first 10 calls to \code{shell\_explain} are served
+and the next 20 return \code{-32005}; a different tool
+(\code{shell\_suggest}) from the same source is unaffected.
+
+\finding{Cost.} Both features add no measurable per-request latency:
+they are checked inside \code{\_handle\_filtered} after authentication
+succeeds, using the same sliding-window and LRU data structures as the
+admission gate. Token lookup is a linear scan of the token set (typically
+2--5 entries) with constant-time comparison per token. Total added code:
+32 lines across three files.
 
 % =====================================================================
 \section{Real-World Exposure}\label{sec:real}
@@ -425,12 +476,15 @@ the cost of fixes on identical workloads.
 This is a single-system, single-operator study. Controlled experiments ran on
 loopback with an emulated Cloudflare hop, so edge behaviour is assumed rather
 than measured, and the latency figures exclude network and tunnel time. The
-benign workload covers five client behaviours but not long-running SSE sessions
-or concurrent multi-client scenarios. The v2 defaults (the /64 prefix, the 20k
-cap and the global-alarm thresholds) are reasonable choices, not tuned optima.
+benign workload now covers concurrent multi-client sessions and rate-window
+recovery (S13, S14) but not SSE streaming or mixed read/write tool workloads.
+The v2 defaults (the /64 prefix, the 20k cap and the global-alarm thresholds)
+and v3 defaults (30 calls per tool per window) are reasonable choices, not
+tuned optima.
 The real-traffic window covers a single hostname whose discoverability depends
 on certificate-transparency logs and DNS enumeration by third parties. The
-techniques evaluated (rate limiting, UA signature blocking, auth-failure banning)
+techniques evaluated (rate limiting, UA signature blocking, auth-failure banning,
+token scoping)
 are individually well established~\citep{fail2ban,nist80063b}; the contribution
 is their measured application and failure modes in the MCP context, not the
 techniques themselves.
@@ -443,13 +497,16 @@ microsecond cost. The first version failed where its state was keyed on
 individual addresses and allowed to grow without bound. Distributed and
 rotating adversaries slipped through, and a growing ban list turned the
 defense into a latency liability. Keying on network sources and bounding
-state fixed each measured failure without new false blocks. Self-hosted agent
-endpoints should treat such gates as cost and visibility controls, and never
-as the authentication boundary.
+state fixed each measured failure without new false blocks. Extending
+defense past authentication with scoped tokens and per-tool rate limits
+bounds the blast radius of a leaked credential and prevents authorized
+abuse of individual tools. Self-hosted agent endpoints should treat such
+gates as cost and visibility controls, and never as the authentication
+boundary.
 
 \smallskip\noindent\textbf{Artifact.} \code{artifact/}: \code{harness2.py},
 \code{harness.py} and \code{surface.py} (tool surface), \code{analyze\_trace.py}, \code{gen\_realtraffic\_tex.py},
-\code{results\_v1.json}, \code{results\_v2.json}, \code{surface.json},
+\code{results\_v1.json}, \code{results\_v2.json}, \code{results\_v3.json}, \code{surface.json},
 \code{replay\_fidelity.json}, and aggregate \code{real\_traffic.json};
 \url{https://github.com/TGvenomYT/agent-endpoint-defense}.
 

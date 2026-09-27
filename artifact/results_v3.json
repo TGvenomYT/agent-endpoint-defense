@@ -1,0 +1,229 @@
+{
+  "meta": {
+    "tag": "v3",
+    "tree": "/Users/niranjan/agent-tools",
+    "date": "2026-09-27 13:46:28 IST",
+    "python": "3.12.13",
+    "machine": "macOS-26.6.1-arm64-arm-64bit",
+    "policy": {
+      "GUARDIAN_ALLOW": [],
+      "GUARDIAN_AUTHFAIL_BAN_BASE": 5,
+      "GUARDIAN_AUTHFAIL_MAX": 8,
+      "GUARDIAN_AUTHFAIL_TIGHT": 3,
+      "GUARDIAN_AUTHFAIL_WINDOW": 300,
+      "GUARDIAN_BAN_MINUTES": 60,
+      "GUARDIAN_BLOCK_BOTS": true,
+      "GUARDIAN_ENABLED": true,
+      "GUARDIAN_GLOBAL_AUTHFAIL_MAX": 40,
+      "GUARDIAN_LOG_MAX": 500000000,
+      "GUARDIAN_PROBE_MAX": 6,
+      "GUARDIAN_PROBE_WINDOW": 300,
+      "GUARDIAN_RATE_MAX": 120,
+      "GUARDIAN_RATE_WINDOW": 60,
+      "GUARDIAN_TRACK_MAX": 20000,
+      "GUARDIAN_V6_PREFIX": 64,
+      "bot_signatures": 38
+    },
+    "runtime_s": 128.0
+  },
+  "E1": {
+    "S1_benign": {
+      "requests": 100,
+      "served": 100,
+      "blocked": 0,
+      "bans": 0
+    },
+    "S1b_benign_discovery": {
+      "requests": 20,
+      "status_counts": {
+        "404": 16,
+        "405": 4
+      },
+      "then_valid_call": 200,
+      "bans": 0
+    },
+    "S2_declared_bots": {
+      "signatures": 38,
+      "blocked_first_request": 38,
+      "still_blocked_after_ua_swap_with_valid_token": 38,
+      "bans": 38
+    },
+    "S3_spoofed_ua_crawlers": {
+      "requests": 38,
+      "blocked_403": 0,
+      "rejected_401": 38,
+      "served": 0
+    },
+    "S4_single_ip_probe": {
+      "attempts": 20,
+      "ban_triggered_at_attempt": 8,
+      "answered_401": 8,
+      "blocked_403": 12,
+      "valid_token_after_ban": 403,
+      "ban_minutes": 5
+    },
+    "S5_distributed_probe": {
+      "ips": 100,
+      "guesses": 700,
+      "answered_401": 323,
+      "blocked_403": 377,
+      "bans": 95
+    },
+    "S6_flood": {
+      "requests": 300,
+      "burst_seconds": 0.06,
+      "served": 120,
+      "throttled_429": 180,
+      "bans": 0,
+      "after_61s": 200,
+      "other_ip_during": 200
+    },
+    "S7_path_scan": {
+      "requests": 20,
+      "status_counts": {
+        "403": 14,
+        "404": 6
+      },
+      "bans": 1
+    },
+    "S8_legit_lockout": {
+      "typos": 8,
+      "valid_after": 403,
+      "ban_minutes": 5
+    },
+    "S8b_legit_allowlisted": {
+      "typos": 8,
+      "valid_after": 200,
+      "ban_minutes": 0
+    },
+    "S9_banned_client_surface": {
+      "POST_mcp": 403,
+      "GET_healthz": 200,
+      "DELETE_mcp": 403,
+      "POST_oversize_300KB": 403,
+      "logged_DELETE": 1,
+      "fresh_client_after": 200
+    },
+    "S12_ipv6_rotation": {
+      "requests": 200,
+      "blocked_403": 200,
+      "bans": 1,
+      "clean_rotation_blocked": 20,
+      "other_64_unaffected": 200
+    },
+    "S11_ablation_disabled": {
+      "bot_status": 401,
+      "probe_401": 20,
+      "ban_records_written": 0,
+      "flood_served": 300
+    },
+    "S13_concurrent_clients": {
+      "clients": 4,
+      "results": {
+        "2": {
+          "served": 50,
+          "blocked": 0
+        },
+        "3": {
+          "served": 50,
+          "blocked": 0
+        },
+        "0": {
+          "served": 50,
+          "blocked": 0
+        },
+        "1": {
+          "served": 50,
+          "blocked": 0
+        }
+      },
+      "errors": [],
+      "bans": 0,
+      "all_served": true
+    },
+    "S14_long_session": {
+      "window1_served": 100,
+      "window2_served": 100,
+      "window1_throttled": 0,
+      "window2_throttled": 0,
+      "bans": 0
+    }
+  },
+  "E2": {
+    "guardian_off": {
+      "n": 3000,
+      "p50": 0.121,
+      "p95": 0.149,
+      "p99": 0.175,
+      "mean": 0.121
+    },
+    "guardian_on": {
+      "n": 3000,
+      "p50": 0.128,
+      "p95": 0.147,
+      "p99": 0.167,
+      "mean": 0.127
+    },
+    "ban_list_scaling": {
+      "0": {
+        "n": 500,
+        "p50": 0.129,
+        "p95": 0.154,
+        "p99": 0.228,
+        "mean": 0.13
+      },
+      "1000": {
+        "n": 500,
+        "p50": 0.131,
+        "p95": 0.164,
+        "p99": 0.234,
+        "mean": 0.132
+      },
+      "10000": {
+        "n": 500,
+        "p50": 0.129,
+        "p95": 0.153,
+        "p99": 0.216,
+        "mean": 0.13
+      },
+      "50000": {
+        "n": 500,
+        "p50": 0.13,
+        "p95": 0.153,
+        "p99": 0.213,
+        "mean": 0.131
+      }
+    }
+  },
+  "E3": {
+    "1000": {
+      "ips": 1000,
+      "tracked_keys": 1000,
+      "bytes": 909424
+    },
+    "10000": {
+      "ips": 10000,
+      "tracked_keys": 10000,
+      "bytes": 9012260
+    },
+    "100000": {
+      "ips": 100000,
+      "tracked_keys": 20000,
+      "bytes": 18846324
+    }
+  },
+  "E4": {
+    "S15_scoped_token": {
+      "full_token_tools": 5,
+      "scoped_token_tools": 2,
+      "scoped_sees_only_allowed": true,
+      "out_of_scope_call_blocked": true
+    },
+    "S16_tool_rate_limit": {
+      "requests": 30,
+      "served": 10,
+      "limited": 20,
+      "other_tool_still_works": true
+    }
+  }
+}

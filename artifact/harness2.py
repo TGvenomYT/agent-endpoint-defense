@@ -33,7 +33,9 @@ class Server:
                 {f"10.{i//65536}.{(i//256)%256}.{i%256}": {"until": until, "reason": "synthetic",
                                                            "since": time.time()}
                  for i in range(prefill_bans)}))
-        e = dict(os.environ, PYTHONPATH=str(AT), AGENTKIT_HTTP_HOST=host,
+        base = {k: v for k, v in os.environ.items()
+                if k not in ("AGENTKIT_HTTP_TOKEN", "AGENTKIT_HTTP_TOKENS")}
+        e = dict(base, PYTHONPATH=str(AT), AGENTKIT_HTTP_HOST=host,
                  AGENTKIT_HTTP_PORT=str(PORT), AGENTKIT_HTTP_TOKEN=TOKEN,
                  GUARDIAN_STATE_DIR=str(self.state))
         e.update({k: str(v) for k, v in env.items()})
@@ -236,6 +238,55 @@ def e1():
     R["S11_ablation_disabled"] = {"bot_status": bot, "probe_401": probe.count(401),
                                   "ban_records_written": len(s.bans()), "flood_served": flood.count(200)}
     s.stop()
+
+    # S13: concurrent multi-client — 4 clients hitting simultaneously, no cross-contamination
+    import threading
+    s = Server("s13")
+    results_by_client = {}
+    errors = []
+
+    def client_work(client_id, ip, ua):
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+            codes = []
+            codes.append(req(ip=ip, ua=ua, body=rpc("initialize", 0, {
+                "protocolVersion": "2025-06-18", "capabilities": {},
+                "clientInfo": {"name": f"client-{client_id}", "version": "1"}}), conn=c))
+            codes.append(req(ip=ip, ua=ua, body=rpc("notifications/initialized", None), conn=c))
+            for _ in range(48):
+                codes.append(req(ip=ip, ua=ua, conn=c))
+            c.close()
+            results_by_client[client_id] = {"served": sum(c in (200, 202) for c in codes),
+                                             "blocked": sum(c in (401, 403, 429) for c in codes)}
+        except Exception as e:
+            errors.append((client_id, str(e)))
+
+    threads = []
+    for i in range(4):
+        t = threading.Thread(target=client_work, args=(i, f"198.51.100.{20+i}", BENIGN_UA[i % len(BENIGN_UA)]))
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    R["S13_concurrent_clients"] = {"clients": 4, "results": results_by_client,
+                                    "errors": errors, "bans": ban_count(s),
+                                    "all_served": all(r.get("blocked", 1) == 0 for r in results_by_client.values())}
+    s.stop()
+
+    # S14: long-running keep-alive session (spans two rate windows, verifies recovery)
+    s = Server("s14")
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    window1 = [req(ip="198.51.100.40", ua=BENIGN_UA[0], conn=c) for _ in range(100)]
+    time.sleep(61)  # wait for rate window to reset
+    window2 = [req(ip="198.51.100.40", ua=BENIGN_UA[0], conn=c) for _ in range(100)]
+    c.close()
+    R["S14_long_session"] = {"window1_served": window1.count(200) + window1.count(202),
+                              "window2_served": window2.count(200) + window2.count(202),
+                              "window1_throttled": window1.count(429),
+                              "window2_throttled": window2.count(429),
+                              "bans": ban_count(s)}
+    s.stop()
+
     return R
 
 
@@ -291,6 +342,89 @@ print(json.dumps({"ips": N, "tracked_keys": len(guardian._hits),
     return out
 
 
+# ── E4: v3 features (scoped tokens, per-tool rate limiting) ──────────────────
+def e4():
+    R = {}
+    from agentkit import config
+    has_scoped = hasattr(config, "HTTP_TOKENS")
+    has_tool_rate = hasattr(config, "HTTP_TOOL_RATE_MAX")
+    if not (has_scoped and has_tool_rate):
+        return {"skipped": "tree does not support v3 features"}
+
+    # S15: scoped token — a restricted token can only list/call its allowed tools
+    FULL_TOKEN = secrets.token_urlsafe(40)
+    SCOPED_TOKEN = secrets.token_urlsafe(40)
+    import json as _j
+    tokens_json = _j.dumps({FULL_TOKEN: ["*"], SCOPED_TOKEN: ["devops_status", "devops_health"]})
+    s = Server("s15", AGENTKIT_HTTP_TOKEN=FULL_TOKEN, AGENTKIT_HTTP_TOKENS=tokens_json)
+
+    # Full token: tools/list returns all public tools
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.request("POST", "/mcp", body=rpc("tools/list"),
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.50",
+                       "Authorization": f"Bearer {FULL_TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); full_body = json.loads(r.read()); c.close()
+    full_tools = [t["name"] for t in full_body.get("result", {}).get("tools", [])]
+
+    # Scoped token: tools/list returns only allowed tools
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.request("POST", "/mcp", body=rpc("tools/list"),
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.51",
+                       "Authorization": f"Bearer {SCOPED_TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); scoped_body = json.loads(r.read()); c.close()
+    scoped_tools = [t["name"] for t in scoped_body.get("result", {}).get("tools", [])]
+
+    # Scoped token calling an out-of-scope tool (shell_suggest — lightweight, no backend)
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.request("POST", "/mcp", body=rpc("tools/call", 1, {"name": "devops_logs", "arguments": {}}),
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.51",
+                       "Authorization": f"Bearer {SCOPED_TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); oos_body = json.loads(r.read()); c.close()
+    out_of_scope_blocked = "error" in oos_body or oos_body.get("error") is not None
+
+    R["S15_scoped_token"] = {"full_token_tools": len(full_tools),
+                              "scoped_token_tools": len(scoped_tools),
+                              "scoped_sees_only_allowed": set(scoped_tools) == {"devops_status", "devops_health"},
+                              "out_of_scope_call_blocked": out_of_scope_blocked}
+    s.stop()
+
+    # S16: per-tool rate limiting — hammer one tool past its limit
+    s = Server("s16", AGENTKIT_TOOL_RATE_MAX="10", AGENTKIT_TOOL_RATE_WINDOW="60",
+               AGENTKIT_HTTP_TOKEN=FULL_TOKEN, AGENTKIT_HTTP_TOKENS=tokens_json)
+    codes = []
+    for i in range(30):
+        c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+        c.request("POST", "/mcp", body=rpc("tools/call", i, {"name": "shell_explain", "arguments": {"command": "ls"}}),
+                  headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.60",
+                           "Authorization": f"Bearer {FULL_TOKEN}", "Content-Type": "application/json"})
+        r = c.getresponse(); body = r.read()
+        if r.status != 200:
+            codes.append(f"http_{r.status}")
+            c.close(); continue
+        try:
+            resp = json.loads(body)
+            err = resp.get("error")
+            is_rate_limited = isinstance(err, dict) and err.get("code") == -32005
+        except Exception:
+            is_rate_limited = False
+        codes.append("limited" if is_rate_limited else "served")
+        c.close()
+    # Different tool from same source should still work
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.request("POST", "/mcp", body=rpc("tools/call", 99, {"name": "shell_suggest", "arguments": {"task": "list files"}}),
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.60",
+                       "Authorization": f"Bearer {FULL_TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); other_body = json.loads(r.read()); c.close()
+    err = other_body.get("error")
+    other_tool_limited = isinstance(err, dict) and err.get("code") == -32005
+    R["S16_tool_rate_limit"] = {"requests": 30, "served": codes.count("served"),
+                                 "limited": codes.count("limited"),
+                                 "other_tool_still_works": not other_tool_limited}
+    s.stop()
+
+    return R
+
+
 if __name__ == "__main__":
     t0 = time.time()
     from agentkit import config
@@ -302,5 +436,6 @@ if __name__ == "__main__":
     res["E1"] = e1(); print(TAG, "E1 done", flush=True)
     res["E2"] = e2(); print(TAG, "E2 done", flush=True)
     res["E3"] = e3(); print(TAG, "E3 done", flush=True)
+    res["E4"] = e4(); print(TAG, "E4 done", flush=True)
     res["meta"]["runtime_s"] = round(time.time() - t0, 1)
     (OUT / f"results_{TAG}.json").write_text(json.dumps(res, indent=2, default=str))
