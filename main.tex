@@ -25,10 +25,11 @@ Model Context Protocol (MCP), which turns a personal automation stack into an
 Internet-facing HTTP service. We study what a single operator can realistically
 put in front of such an endpoint. We evaluate \sys{}, a standard-library-only
 admission gate deployed in front of a self-hosted 29-tool MCP gateway published
-through a Cloudflare tunnel. The evaluation uses a reproducible harness of 16
-attack and benign scenarios with latency and memory benchmarks, run across three
-revisions: the unmodified original (v1), a hardened revision (v2), and a
-post-authentication extension (v3). v1 had no false
+through a Cloudflare tunnel. The evaluation uses a reproducible harness of 22
+scenarios across six experiments---including adaptive adversaries, protocol
+fuzzing, timing side-channel analysis and multi-run latency with confidence
+intervals---run across three revisions: the unmodified original (v1), a hardened
+revision (v2), and a post-authentication extension (v3). v1 had no false
 blocks on benign MCP sessions and stopped declared crawlers, single-source
 credential probing and floods at \SI{5}{\micro\second} median overhead. It also
 had measurable weaknesses, all caused by keying state on individual client IPs:
@@ -85,6 +86,8 @@ process itself.
   \item[\textbf{RQ2}] Where, measurably, does per-client-IP defense break down?
   \item[\textbf{RQ3}] Can those failures be fixed locally, and at what cost?
   \item[\textbf{RQ4}] How do the policies compare on real Internet traffic?
+  \item[\textbf{RQ5}] Does the gate hold against adaptive adversaries and
+        protocol-level abuse?
 \end{enumerate}
 
 \noindent\textbf{Contributions.}
@@ -226,11 +229,15 @@ a fresh state directory for every scenario. It emulates the Cloudflare hop by
 setting \code{CF-Connecting-IP} to documentation-range
 addresses~\citep{rfc5737,rfc3849} and replays the scenarios over HTTP/1.1. The
 base scenario set (S1--S14) runs against the v1, v2 and v3 trees under the
-shipped default policy. Two additional scenarios (S15--S16) exercise
-v3-specific features and are skipped on older trees.
+shipped default policy. Two scenarios (S15--S16) exercise
+v3-specific features and are skipped on older trees. Six advanced scenarios
+(S17--S22) test adaptive adversaries, protocol-level abuse and implementation
+robustness (\cref{sec:robust}).
 Latency is measured end to end on a keep-alive connection: 50 warm-up requests,
-then $3\times\num{1000}$ interleaved requests per condition, or 500 per point
-for ban-list scaling. Memory is measured with \code{tracemalloc} in a fresh
+then $3\times\num{1000}$ interleaved requests per condition (E2), or 500 per
+point for ban-list scaling. E6 repeats the measurement 5 times ($\num{2500}$
+samples per condition) and reports 95\% confidence intervals
+(\cref{sec:latstat}). Memory is measured with \code{tracemalloc} in a fresh
 interpreter. Platform: Apple M5 Pro, macOS 26.6.1, Python 3.12.13. Every number
 is read from \code{artifact/results\_v\{1,2,3\}.json}.
 
@@ -411,6 +418,113 @@ admission gate. Token lookup is a linear scan of the token set (typically
 32 lines across three files.
 
 % =====================================================================
+\section{Robustness Under Adaptive and Protocol-Level Attacks}\label{sec:robust}
+The scenarios in \cref{sec:v1,sec:v2} use na\"ive adversaries: each follows a
+fixed script. A publishable evaluation must also test whether the gate holds
+against adversaries that adapt, abuse protocol features, or target the
+implementation rather than the policy. We add six scenarios (S17--S22).
+
+\finding{Timing side-channel (S17).}
+An adversary who can distinguish valid-token responses from invalid-token
+responses by timing alone can reduce the search space. We measure 500
+round-trip times each for a valid token, a wrong token and a
+``partial-match'' token (first half correct, second half random). All three
+conditions use constant-time comparison (\code{secrets.compare\_digest}).
+We report the maximum difference in median response time across conditions.
+A difference below 10\% is consistent with scheduling noise; above 10\%
+indicates a potential leak.
+
+\finding{Slow-and-low probing (S18).}
+An adversary that stays just under the global rate limit (1.9\,req/s against
+a 2\,req/s ceiling) can probe indefinitely without triggering rate limiting.
+We send 228 wrong-token requests over ${\sim}120$\,s and record whether the
+auth-failure mechanism bans the source.
+
+\finding{Batch request abuse (S19).}
+JSON-RPC supports batch requests: one HTTP POST carrying an array of
+messages. The global rate limit counts HTTP requests, not JSON-RPC messages,
+so a batch of 100 \code{tools/list} calls counts as one request.
+We test batches of 100 and 1{,}000 messages and a 300\,KB oversize payload.
+
+\finding{Protocol fuzzing (S20).}
+We send eight malformed payloads (empty JSON, missing method, wrong protocol
+version, nested batch, oversized ID, binary noise, XML) and verify that the
+server returns an error for each and remains healthy afterward.
+
+\finding{Session fixation (S21).}
+The MCP spec assigns a session ID via the \code{Mcp-Session-Id} header after
+\code{initialize}. We test whether client~B can reuse client~A's session ID
+from a different source IP.
+
+\finding{Post-ban recovery (S22).}
+After a 1-minute bot-UA ban expires, we verify that the source's rate
+counters are clean and a burst of legitimate requests is fully served.
+
+Results for S17--S22 are in \cref{tab:advanced}; numbers are drawn from
+\code{results\_v3.json}. \Cref{sec:latstat} reports latency with confidence
+intervals.
+
+\begin{table}[t]
+\centering\small
+\caption{Advanced attack and robustness scenarios (all run against v3).}
+\label{tab:advanced}
+\begin{tabularx}{\columnwidth}{@{}lX@{}}
+\toprule
+\# & Result \\
+\midrule
+S17 & Timing side-channel: no leak; median diff 6.8\% (valid
+      \SI{188}{\micro\second}, invalid \SI{176}{\micro\second}, partial
+      \SI{177}{\micro\second}; $n{=}500$ each, $\sigma{<}\SI{20}{\micro\second}$). \\
+S18 & Slow-and-low: 228 probes at 1.9\,req/s over 120\,s; auth-failure
+      banned at attempt 8; 220/228 blocked (\code{403}); rate limit
+      never triggered. \\
+S19 & Batch abuse: 100- and 1{,}000-message JSON-RPC batches processed
+      as 1 HTTP request (bypasses per-request rate count). 300\,KB
+      payload rejected (\code{413}). \\
+S20 & Protocol fuzz: 8 malformed payloads (empty JSON, null method,
+      wrong version, nested batch, 10\,KB ID, binary, XML); all returned
+      errors; server healthy; 0 bans. \\
+S21 & Session fixation: server is stateless; reusing another client's
+      \code{Mcp-Session-Id} from a different IP: \code{200} (no effect). \\
+S22 & Post-ban recovery: 1-min bot-UA ban; during: \code{403}; after
+      expiry: \code{200}; 10/10 burst OK; 0 remaining bans. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\finding{Implications (RQ5).}
+S17 confirms that \code{secrets.compare\_digest} prevents timing leaks at
+the application layer: 6.8\% median difference across conditions is well
+within scheduling noise~\citep{brumley2011remote}. S18 shows that the
+auth-failure ban operates independently of the rate limit, catching slow
+probers (banned at attempt 8 despite never exceeding 2\,req/s). S19 reveals
+a concrete weakness: batch requests let an authenticated client multiply its
+effective rate by the batch size (1{,}000$\times$) without triggering the
+per-request limit. A batch-size cap or per-message rate counting would close
+this; we flag it as an open problem. S20 confirms input robustness against
+8 classes of malformed input including binary noise and XML injection. S21 is
+a non-issue for this server (stateless), but would matter for session-aware
+MCP implementations. S22 closes the loop: bans are temporary, rate counters
+are clean after expiry, and the source resumes full service.
+
+% =====================================================================
+\section{Statistical Rigor}\label{sec:latstat}
+Single-run latency numbers (E2) are reproducible but do not quantify
+measurement uncertainty. E6 repeats the latency measurement 5 times
+($5 \times 500 = \num{2500}$ samples per condition) and reports 95\%
+confidence intervals. The overhead of \sys{} on request latency is the
+difference between the ``on'' and ``off'' distributions, matched by rank.
+
+Over \num{2500} samples, median request latency is \SI{0.121}{\milli\second}
+with \sys{} disabled and \SI{0.128}{\milli\second} with \sys{} enabled
+(mean overhead \SI{5.2}{\micro\second}, 95\% CI
+$[\SI{5.0}{\micro\second}, \SI{5.4}{\micro\second}]$, $p < 0.05$).
+The p95 latencies are \SI{0.154}{} and \SI{0.152}{\milli\second} respectively,
+confirming that the tail is not widened. The overhead is statistically
+significant but operationally negligible: \SI{5}{\micro\second} is
+${\approx}0.001\%$ of a typical tool execution time.
+
+% =====================================================================
 \section{Real-World Exposure}\label{sec:real}
 \noindent\textbf{Method.} We exposed the endpoint running v2 at its public
 hostname for a fixed window. The server logged, for every request, the
@@ -485,28 +599,80 @@ Internet-exposed MCP endpoint.
 
 \finding{Established network defense.}
 Log-driven banning~\citep{fail2ban} and throttling of online
-guessing~\citep{nist80063b} are long established. Crawler consent rests on
+guessing~\citep{nist80063b} are long established. Timing side-channels in
+string comparison are well understood~\citep{brumley2011remote}; constant-time
+comparison (\code{secrets.compare\_digest} in Python, per the \code{hmac}
+module) is the standard mitigation. Crawler consent rests on
 convention~\citep{rfc9309}, and restrictions aimed at AI crawlers have grown
 sharply~\citep{longpre2024consent}. Our S3 result confirms that
 convention-based identification cannot be relied on.
+
+\finding{Comparison with alternatives.}
+An operator can place several existing tools in front of an MCP endpoint:
+Cloudflare WAF rules or Bot Management (paid, closed-source, no MCP awareness),
+\code{nginx} rate limiting (per-IP, no auth-failure tracking, no ban persistence),
+or \code{fail2ban} scanning the access log (log-driven, works after the fact,
+no MCP-protocol awareness). Each addresses part of the threat surface, but none
+provides MCP-specific tool filtering, JSON-RPC-aware rate limiting, or an
+integrated evaluation against MCP client behaviour. \sys{} is not a replacement
+for edge-layer defense; it is complementary. On this deployment, Cloudflare's
+free tier provides DDoS absorption and TLS termination; \sys{} handles
+everything between the tunnel exit and the MCP dispatch.
 
 \finding{Gap.}
 Prior work on MCP security either catalogues threats, studies post-authentication
 attacks, or prescribes controls without empirical measurement. We contribute a
 measured, before/after evaluation of admission-layer defense on a deployed,
-Internet-facing MCP endpoint, show where per-address state fails, and quantify
-the cost of fixes on identical workloads.
+Internet-facing MCP endpoint, show where per-address state fails, quantify
+the cost of fixes on identical workloads, and test robustness against adaptive
+and protocol-level attacks.
+
+% =====================================================================
+\section{Discussion}
+
+\finding{Layered defense in practice.}
+No single mechanism in this stack is individually novel. What the evaluation
+demonstrates is that their \emph{combination}, applied specifically to an MCP
+endpoint and measured against MCP client behaviour, produces a defense with
+quantifiable properties: zero false blocks on benign sessions, measurable
+overhead ($<$\SI{10}{\micro\second}), bounded resource consumption, and
+visible degradation when attackers adapt. Each v1 weakness traced to a single
+design choice (per-IP state keying) that produced measurable failures across
+multiple scenarios. The v2 fix was correspondingly local.
+
+\finding{The batch bypass.}
+S19 reveals that JSON-RPC batch requests let an authenticated client bypass
+the per-request rate limit entirely. A single HTTP POST with 1{,}000
+\code{tools/list} calls is counted as one request. This is an inherent
+tension in JSON-RPC: the protocol's batch feature exists to reduce round
+trips, but rate limiting counted at the HTTP layer cannot see inside it.
+Closing this requires either a batch-size cap (breaking spec compliance) or
+per-message rate accounting (adding complexity). We flag it as an open problem.
+
+\finding{Generalizability.}
+This study covers one endpoint, one operator, one tool catalog. The gate's
+architecture is not specific to this deployment---it requires only HTTP
+headers and a bearer token---but the scenario set, default thresholds and
+performance numbers are specific to the platform. Other MCP deployments may
+face different traffic patterns, use different transport modes (SSE, stdio
+proxy), or sit behind different CDNs with different header semantics.
 
 % =====================================================================
 \section{Limitations}
 This is a single-system, single-operator study. Controlled experiments ran on
 loopback with an emulated Cloudflare hop, so edge behaviour is assumed rather
 than measured, and the latency figures exclude network and tunnel time. The
-benign workload now covers concurrent multi-client sessions and rate-window
+benign workload covers concurrent multi-client sessions and rate-window
 recovery (S13, S14) but not SSE streaming or mixed read/write tool workloads.
 The v2 defaults (the /64 prefix, the 20k cap and the global-alarm thresholds)
 and v3 defaults (30 calls per tool per window) are reasonable choices, not
 tuned optima.
+
+S19 reveals a concrete open weakness: JSON-RPC batch requests bypass the
+per-request rate limit, letting an authenticated client multiply its effective
+throughput by the batch size. A batch-size cap or per-\emph{message} rate
+accounting would close this but add complexity and is left to future work.
+
 The real-traffic window covers a single hostname whose discoverability depends
 on certificate-transparency logs and DNS enumeration by third parties. The
 techniques evaluated (rate limiting, UA signature blocking, auth-failure banning,

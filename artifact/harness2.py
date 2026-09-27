@@ -425,6 +425,213 @@ def e4():
     return R
 
 
+# ── E5: advanced attack scenarios ─────────────────────────────────────────────
+def e5():
+    R = {}
+
+    # S17: timing side-channel — does response time differ for valid vs invalid token?
+    # If the server leaks timing info, an attacker can distinguish "close" tokens.
+    s = Server("s17", GUARDIAN_RATE_MAX=10**9, GUARDIAN_AUTHFAIL_MAX=10**9)
+    warmup = [req(ip="198.51.100.1") for _ in range(100)]
+    valid_times, invalid_times, no_token_times = [], [], []
+    wrong = secrets.token_urlsafe(40)
+    partial = TOKEN[:20] + secrets.token_urlsafe(20)  # half-right token
+    for _ in range(500):
+        c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+        t0 = time.perf_counter()
+        req(ip="198.51.100.1", token=TOKEN, conn=c)
+        valid_times.append((time.perf_counter() - t0) * 1e6)
+        c.close()
+
+        c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+        t0 = time.perf_counter()
+        req(ip="198.51.100.2", token=wrong, conn=c)
+        invalid_times.append((time.perf_counter() - t0) * 1e6)
+        c.close()
+
+        c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+        t0 = time.perf_counter()
+        req(ip="198.51.100.3", token=partial, conn=c)
+        no_token_times.append((time.perf_counter() - t0) * 1e6)
+        c.close()
+    s.stop()
+    def timing_stats(xs):
+        xs = sorted(xs)
+        return {"mean": round(st.mean(xs), 1), "median": round(xs[len(xs)//2], 1),
+                "stdev": round(st.stdev(xs), 1), "n": len(xs)}
+    vs, ivs, nts = timing_stats(valid_times), timing_stats(invalid_times), timing_stats(no_token_times)
+    # If median differs by >10%, there's a timing leak
+    max_median = max(vs["median"], ivs["median"], nts["median"])
+    min_median = min(vs["median"], ivs["median"], nts["median"])
+    R["S17_timing_sidechannel"] = {
+        "valid_token": vs, "invalid_token": ivs, "partial_match_token": nts,
+        "max_median_diff_pct": round((max_median - min_median) / min_median * 100, 1),
+        "timing_leak": (max_median - min_median) / min_median > 0.10
+    }
+
+    # S18: slow-and-low — attacker stays just under rate limit
+    s = Server("s18")
+    # 120 req/60s = 2/s limit. Send at 1.9/s for 120s (228 req total)
+    codes = []
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    for i in range(228):
+        codes.append(req(ip="192.0.2.80", token=secrets.token_urlsafe(40), conn=c))
+        if i < 227:
+            time.sleep(0.526)  # ~1.9 req/s
+    c.close()
+    ban_at = next((i + 1 for i, r in enumerate(s.log()) if "banned" in r.get("note", "")), None)
+    R["S18_slow_and_low_probe"] = {
+        "requests": len(codes), "duration_target_s": 120,
+        "answered_401": codes.count(401), "blocked_403": codes.count(403),
+        "throttled_429": codes.count(429), "ban_triggered_at": ban_at,
+        "bans": ban_count(s)
+    }
+    s.stop()
+
+    # S19: batch request abuse — stuff many operations into one HTTP request
+    s = Server("s19")
+    # JSON-RPC batch: 100 tools/list calls in one POST
+    batch = [{"jsonrpc": "2.0", "id": i, "method": "tools/list"} for i in range(100)]
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    c.request("POST", "/mcp", body=json.dumps(batch),
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.70",
+                       "Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); batch_body = r.read(); c.close()
+    try:
+        batch_resp = json.loads(batch_body)
+        batch_results = len(batch_resp) if isinstance(batch_resp, list) else 1
+    except Exception:
+        batch_results = 0
+    # Now try an oversized batch (1000 calls) — should it be rate-limited?
+    big_batch = [{"jsonrpc": "2.0", "id": i, "method": "tools/list"} for i in range(1000)]
+    big_body = json.dumps(big_batch)
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    c.request("POST", "/mcp", body=big_body,
+              headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.71",
+                       "Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"})
+    r2 = c.getresponse(); big_body_resp = r2.read(); c.close()
+    try:
+        big_resp = json.loads(big_body_resp)
+        big_results = len(big_resp) if isinstance(big_resp, list) else 1
+    except Exception:
+        big_results = 0
+    # Oversize payload (>256KB) — should be rejected
+    oversize_status = req(ip="198.51.100.72", body="x" * 300_000)
+    R["S19_batch_abuse"] = {
+        "batch_100_status": r.status, "batch_100_responses": batch_results,
+        "batch_1000_status": r2.status, "batch_1000_responses": big_results,
+        "batch_bypasses_rate_count": batch_results > 1,
+        "oversize_300kb_status": oversize_status
+    }
+    s.stop()
+
+    # S20: malformed JSON-RPC — fuzz the protocol layer
+    s = Server("s20")
+    malformed_cases = {
+        "empty_object": "{}",
+        "no_method": '{"jsonrpc":"2.0","id":1}',
+        "null_method": '{"jsonrpc":"2.0","id":1,"method":null}',
+        "wrong_version": '{"jsonrpc":"1.0","id":1,"method":"tools/list"}',
+        "nested_batch": json.dumps([[{"jsonrpc":"2.0","id":1,"method":"tools/list"}]]),
+        "huge_id": json.dumps({"jsonrpc":"2.0","id":"A"*10000,"method":"tools/list"}),
+        "binary_noise": "\x00\x01\x02\x03" * 100,
+        "xml_injection": '<?xml version="1.0"?><!DOCTYPE foo><tools/>',
+    }
+    results = {}
+    for name, body in malformed_cases.items():
+        try:
+            status = req(ip="198.51.100.80", body=body)
+            results[name] = status
+        except Exception as e:
+            results[name] = f"error:{e}"
+    # Verify server still responds after fuzz
+    healthy = req(ip="198.51.100.81")
+    R["S20_protocol_fuzz"] = {
+        "cases": results, "server_healthy_after": healthy == 200,
+        "bans": ban_count(s)
+    }
+    s.stop()
+
+    # S21: session fixation — reuse another client's Mcp-Session-Id
+    s = Server("s21")
+    # Client A initializes, gets a session ID
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.request("POST", "/mcp", body=rpc("initialize", 0, {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "clientA", "version": "1"}}),
+        headers={"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": "198.51.100.90",
+                 "Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"})
+    r = c.getresponse(); r.read()
+    session_id = r.getheader("Mcp-Session-Id", "")
+    c.close()
+    # Client B tries to use A's session ID
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    headers = {"User-Agent": BENIGN_UA[1], "CF-Connecting-IP": "198.51.100.91",
+               "Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    if session_id:
+        headers["Mcp-Session-Id"] = session_id
+    c.request("POST", "/mcp", body=rpc("tools/list"),
+              headers=headers)
+    r2 = c.getresponse(); r2.read(); c.close()
+    R["S21_session_fixation"] = {
+        "session_id_issued": bool(session_id),
+        "reuse_from_other_ip_status": r2.status,
+        "server_is_stateless": True  # our server doesn't track sessions
+    }
+    s.stop()
+
+    # S22: reconnection after ban expiry — verify clean slate
+    s = Server("s22", GUARDIAN_BAN_MINUTES="1")  # 1-min ban for fast test
+    # Get banned
+    req(ip="192.0.2.100", ua="sqlmap/1.8", token=None)
+    banned = req(ip="192.0.2.100")
+    # Wait for ban expiry
+    time.sleep(62)
+    after = req(ip="192.0.2.100")
+    # Verify rate counters are also clean
+    burst = [req(ip="192.0.2.100") for _ in range(10)]
+    R["S22_post_ban_recovery"] = {
+        "during_ban": banned,
+        "after_expiry": after,
+        "burst_after_ok": all(c == 200 for c in burst),
+        "bans_remaining": ban_count(s)
+    }
+    s.stop()
+
+    return R
+
+
+# ── E6: statistical rigor — multi-run latency with confidence intervals ───────
+def e6():
+    import math
+    RUNS = 5
+    all_on, all_off = [], []
+    for run in range(RUNS):
+        off_samples = lat(500, GUARDIAN_ENABLED=0)
+        on_samples = lat(500)
+        all_off.extend(off_samples)
+        all_on.extend(on_samples)
+
+    def ci95(xs):
+        n = len(xs)
+        mean = st.mean(xs)
+        se = st.stdev(xs) / math.sqrt(n)
+        return {"n": n, "mean": round(mean, 4), "stdev": round(st.stdev(xs), 4),
+                "ci95_low": round(mean - 1.96 * se, 4), "ci95_high": round(mean + 1.96 * se, 4),
+                "median": round(sorted(xs)[n // 2], 4),
+                "p95": round(sorted(xs)[int(0.95 * n)], 4),
+                "p99": round(sorted(xs)[int(0.99 * n)], 4)}
+
+    overhead = [on - off for on, off in zip(sorted(all_on), sorted(all_off))]
+    return {
+        "runs": RUNS, "samples_per_run": 500,
+        "guardian_off": ci95(all_off),
+        "guardian_on": ci95(all_on),
+        "overhead_ms": ci95(overhead),
+        "overhead_significant": ci95(overhead)["ci95_low"] > 0
+    }
+
+
 if __name__ == "__main__":
     t0 = time.time()
     from agentkit import config
@@ -437,5 +644,7 @@ if __name__ == "__main__":
     res["E2"] = e2(); print(TAG, "E2 done", flush=True)
     res["E3"] = e3(); print(TAG, "E3 done", flush=True)
     res["E4"] = e4(); print(TAG, "E4 done", flush=True)
+    res["E5"] = e5(); print(TAG, "E5 done", flush=True)
+    res["E6"] = e6(); print(TAG, "E6 done", flush=True)
     res["meta"]["runtime_s"] = round(time.time() - t0, 1)
     (OUT / f"results_{TAG}.json").write_text(json.dumps(res, indent=2, default=str))

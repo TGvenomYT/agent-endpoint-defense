@@ -2,7 +2,7 @@
   "meta": {
     "tag": "v3",
     "tree": "/Users/niranjan/agent-tools",
-    "date": "2026-09-27 13:46:28 IST",
+    "date": "2026-09-27 14:18:23 IST",
     "python": "3.12.13",
     "machine": "macOS-26.6.1-arm64-arm-64bit",
     "policy": {
@@ -24,7 +24,7 @@
       "GUARDIAN_V6_PREFIX": 64,
       "bot_signatures": 38
     },
-    "runtime_s": 128.0
+    "runtime_s": 313.5
   },
   "E1": {
     "S1_benign": {
@@ -71,7 +71,7 @@
     },
     "S6_flood": {
       "requests": 300,
-      "burst_seconds": 0.06,
+      "burst_seconds": 0.05,
       "served": 120,
       "throttled_429": 180,
       "bans": 0,
@@ -120,11 +120,7 @@
     "S13_concurrent_clients": {
       "clients": 4,
       "results": {
-        "2": {
-          "served": 50,
-          "blocked": 0
-        },
-        "3": {
+        "1": {
           "served": 50,
           "blocked": 0
         },
@@ -132,7 +128,11 @@
           "served": 50,
           "blocked": 0
         },
-        "1": {
+        "2": {
+          "served": 50,
+          "blocked": 0
+        },
+        "3": {
           "served": 50,
           "blocked": 0
         }
@@ -153,44 +153,44 @@
     "guardian_off": {
       "n": 3000,
       "p50": 0.121,
-      "p95": 0.149,
-      "p99": 0.175,
-      "mean": 0.121
+      "p95": 0.154,
+      "p99": 0.212,
+      "mean": 0.123
     },
     "guardian_on": {
       "n": 3000,
-      "p50": 0.128,
+      "p50": 0.129,
       "p95": 0.147,
-      "p99": 0.167,
-      "mean": 0.127
+      "p99": 0.171,
+      "mean": 0.128
     },
     "ban_list_scaling": {
       "0": {
         "n": 500,
-        "p50": 0.129,
+        "p50": 0.131,
         "p95": 0.154,
-        "p99": 0.228,
-        "mean": 0.13
+        "p99": 0.198,
+        "mean": 0.131
       },
       "1000": {
         "n": 500,
         "p50": 0.131,
-        "p95": 0.164,
-        "p99": 0.234,
-        "mean": 0.132
+        "p95": 0.153,
+        "p99": 0.195,
+        "mean": 0.131
       },
       "10000": {
         "n": 500,
         "p50": 0.129,
-        "p95": 0.153,
-        "p99": 0.216,
+        "p95": 0.151,
+        "p99": 0.214,
         "mean": 0.13
       },
       "50000": {
         "n": 500,
-        "p50": 0.13,
-        "p95": 0.153,
-        "p99": 0.213,
+        "p50": 0.131,
+        "p95": 0.151,
+        "p99": 0.164,
         "mean": 0.131
       }
     }
@@ -225,5 +225,106 @@
       "limited": 20,
       "other_tool_still_works": true
     }
+  },
+  "E5": {
+    "S17_timing_sidechannel": {
+      "valid_token": {
+        "mean": 190.3,
+        "median": 188.3,
+        "stdev": 16.0,
+        "n": 500
+      },
+      "invalid_token": {
+        "mean": 178.4,
+        "median": 176.3,
+        "stdev": 19.9,
+        "n": 500
+      },
+      "partial_match_token": {
+        "mean": 179.4,
+        "median": 177.3,
+        "stdev": 16.3,
+        "n": 500
+      },
+      "max_median_diff_pct": 6.8,
+      "timing_leak": false
+    },
+    "S18_slow_and_low_probe": {
+      "requests": 228,
+      "duration_target_s": 120,
+      "answered_401": 8,
+      "blocked_403": 220,
+      "throttled_429": 0,
+      "ban_triggered_at": 8,
+      "bans": 1
+    },
+    "S19_batch_abuse": {
+      "batch_100_status": 200,
+      "batch_100_responses": 100,
+      "batch_1000_status": 200,
+      "batch_1000_responses": 1000,
+      "batch_bypasses_rate_count": true,
+      "oversize_300kb_status": 413
+    },
+    "S20_protocol_fuzz": {
+      "cases": {
+        "empty_object": 202,
+        "no_method": 200,
+        "null_method": 200,
+        "wrong_version": 200,
+        "nested_batch": 200,
+        "huge_id": 200,
+        "binary_noise": 400,
+        "xml_injection": 400
+      },
+      "server_healthy_after": true,
+      "bans": 0
+    },
+    "S21_session_fixation": {
+      "session_id_issued": true,
+      "reuse_from_other_ip_status": 200,
+      "server_is_stateless": true
+    },
+    "S22_post_ban_recovery": {
+      "during_ban": 403,
+      "after_expiry": 200,
+      "burst_after_ok": true,
+      "bans_remaining": 0
+    }
+  },
+  "E6": {
+    "runs": 5,
+    "samples_per_run": 500,
+    "guardian_off": {
+      "n": 2500,
+      "mean": 0.1227,
+      "stdev": 0.0202,
+      "ci95_low": 0.122,
+      "ci95_high": 0.1235,
+      "median": 0.121,
+      "p95": 0.1543,
+      "p99": 0.1965
+    },
+    "guardian_on": {
+      "n": 2500,
+      "mean": 0.128,
+      "stdev": 0.0164,
+      "ci95_low": 0.1273,
+      "ci95_high": 0.1286,
+      "median": 0.1283,
+      "p95": 0.1518,
+      "p99": 0.1751
+    },
+    "overhead_ms": {
+      "n": 2500,
+      "mean": 0.0052,
+      "stdev": 0.0046,
+      "ci95_low": 0.005,
+      "ci95_high": 0.0054,
+      "median": 0.0069,
+      "p95": 0.0076,
+      "p99": 0.0078
+    },
+    "overhead_significant": true
   }
 }
