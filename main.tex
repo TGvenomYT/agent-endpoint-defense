@@ -156,6 +156,7 @@ enforcement runs in-process before any tool code executes.}
 \end{figure}
 
 \subsection{Threat model}
+\textbf{What this work addresses.}
 Remote, unauthenticated adversaries send arbitrary HTTP requests through
 Cloudflare:
 (T1) \emph{declared} crawlers and scanners that name themselves in the
@@ -166,10 +167,35 @@ Cloudflare:
 (T5) path scanners;
 (T6) adversaries who rotate addresses, for example within an IPv6 /64.
 The goals are to prevent unauthorized tool execution, bound the operator's
-resource cost and provide visibility. Out of scope: a compromised operator
-machine, Cloudflare itself, volumetric DDoS absorbed at the edge, and attacks
-by \emph{authorized} clients such as indirect prompt
-injection~\citep{greshake2023indirect}.
+resource cost and provide visibility.
+
+An operator who does not need external access can avoid all of these by not
+exposing the endpoint at all---for example, binding only to a Tailscale
+address or removing the Cloudflare tunnel. This work targets endpoints that
+are \emph{intentionally} Internet-facing, where unauthenticated traffic is an
+operational reality.
+
+\smallskip\noindent\textbf{What this work does not address.}
+A leaked or stolen bearer token gives the holder full access to the
+exposed tool surface. \sys{} does not detect or prevent this: once a
+request carries a valid token, it is treated as authorized.
+v3 scoped tokens (\cref{sec:v3}) reduce the \emph{blast radius}---a leaked
+monitoring token cannot call shell or logging tools---but they do not
+prevent use of the leaked credential within its scope.
+
+Post-authentication threats are also out of scope.
+Tool poisoning (a malicious tool description that misleads the
+model)~\citep{mcptox2025}, indirect prompt injection (a document or webpage
+that tricks the model into making unintended tool
+calls)~\citep{greshake2023indirect}, and trust escalation across
+sessions~\citep{trustshift2026} are all attacks by or through
+\emph{authorized} clients. They exploit the model's reasoning, not the
+server's admission layer. Defending against them requires client-side
+guardrails, input screening, or sandboxed
+execution~\citep{cascade2026,nsamcp2026}---none of which \sys{} provides.
+
+Also out of scope: a compromised operator machine, Cloudflare itself, and
+volumetric DDoS absorbed at the edge.
 
 \subsection{Guardian v1}
 \sys{} v1 (\code{guardian.py}, 263 lines, Python standard library only) makes
