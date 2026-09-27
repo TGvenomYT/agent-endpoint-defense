@@ -1,0 +1,12 @@
+state/
+*.log
+*.aux
+*.bbl
+*.blg
+*.out
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+realtraffic.tex.bak
+realtraffic.tex
+__pycache__/

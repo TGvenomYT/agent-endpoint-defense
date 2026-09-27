@@ -1,0 +1,468 @@
+\documentclass[10pt,twocolumn]{article}
+\input{preamble}
+
+% Real-traffic numbers are generated from the exposure study (artifact/gen_realtraffic_tex.py).
+\newif\ifrealdata
+\IfFileExists{realtraffic.tex}{\input{realtraffic}\realdatatrue}{\realdatafalse}
+
+\title{\Large\bfseries Guarding the Door: Measuring and Hardening Lightweight\\
+Application-Layer Defense for an Internet-Exposed {MCP} Agent Endpoint}
+\author{%
+  Niranjan R.\\
+  Department of Artificial Intelligence and Data Science\\
+  KPR Institute of Engineering and Technology (KPRIET), Arasur, Coimbatore\\
+  \texttt{niranjan.r.dev@proton.me}
+}
+\date{}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+\begin{abstract}
+Tool-using AI agents are increasingly reached over the network through the
+Model Context Protocol (MCP), which turns a personal automation stack into an
+Internet-facing HTTP service. We study what a single operator can realistically
+put in front of such an endpoint. We evaluate \sys{}, a standard-library-only
+admission gate deployed in front of a self-hosted 29-tool MCP gateway published
+through a Cloudflare tunnel. The evaluation uses a reproducible harness of 14
+attack and benign scenarios with latency and memory benchmarks, run against the
+unmodified original (v1) and against a hardened revision (v2). v1 had no false
+blocks on benign MCP sessions and stopped declared crawlers, single-source
+credential probing and floods at \SI{5}{\micro\second} median overhead. It also
+had measurable weaknesses, all caused by keying state on individual client IPs:
+distributed guessing went unbanned (700 guesses, 0 bans), ban-list lookups grew
+linearly (\SI{21.7}{\milli\second} per request at 50k bans), rate-limit memory
+was unbounded (\SI{87}{MB} at 100k sources), and there were further gaps in IPv6
+rotation, header trust and lockout. v2 closes each of these with a small local
+change. Latency stays flat at \SI{0.13}{\milli\second} up to 50k bans
+($169\times$ faster), memory is capped (\SI{18.8}{MB} at 100k sources),
+distributed guessing earns 95 bans, IPv6 rotation inside a /64 costs one ban
+instead of 200, and a mistyped token costs 5 minutes rather than an hour. None of
+this introduces benign false blocks, and v2 adds \SI{9}{\micro\second} per
+request. User-agent spoofing remains undetectable at this layer; the bearer token
+still stops it.
+\ifrealdata
+Over a \RTHours-hour public exposure (\RTRequests{} requests from \RTSources{}
+sources), replaying the same real trace through each policy shows v1 blocking
+\RTvOneBlocked{} requests at the gate and v2 blocking \RTvTwoBlocked{}.
+\else
+A time-boxed public exposure study is in progress; its results will be
+replayed through all three policies using the validated trace-replay tooling.
+\fi
+We release the harness, trace-replay tooling and aggregate results.
+\end{abstract}
+
+% =====================================================================
+\section{Introduction}
+Agent frameworks let a language model call tools~\citep{yao2023react,schick2023toolformer,patil2023gorilla},
+and MCP standardizes how those tools are exposed over stdio or HTTP~\citep{mcpspec}.
+An MCP server published on a public hostname inherits every property of an
+Internet service. Internet-wide scanners find it~\citep{durumeric2013zmap}. AI
+data collectors crawl it, and their volume and opt-out behaviour are in
+flux~\citep{longpre2024consent,rfc9309}. Others probe it for credentials. Unlike
+a static website, the thing behind the door can \emph{act}. The security
+community has responded: surveys catalogue tool poisoning and over-privileged
+servers~\citep{hou2025mcp,owaspllm2025}; benchmarks quantify tool-poisoning
+success rates above 72\%~\citep{mcptox2025}; and the NSA has published formal
+design guidance~\citep{nsamcp2026}. Yet a recent systematic review of 73
+defense studies~\citep{tamayo2026slr} finds that all existing work targets
+post-authentication threats. We ask the question that comes first:
+\emph{who can reach the endpoint at all, and at what cost to the operator?}
+Enterprises answer with identity-aware proxies and managed bot defense.
+Individual developers who self-host an MCP server often have only the server
+process itself.
+
+\begin{enumerate}
+  \item[\textbf{RQ1}] Does a small, dependency-free admission gate stop the
+        unwanted traffic an exposed agent endpoint attracts, without blocking
+        legitimate MCP clients?
+  \item[\textbf{RQ2}] Where, measurably, does per-client-IP defense break down?
+  \item[\textbf{RQ3}] Can those failures be fixed locally, and at what cost?
+  \item[\textbf{RQ4}] How do the policies compare on real Internet traffic?
+\end{enumerate}
+
+\noindent\textbf{Contributions.}
+(i) A deployed defense for an MCP endpoint that combines an admission gate,
+bearer authentication and capability minimization (\cref{sec:design}).
+(ii) A reproducible evaluation of the unmodified code, with eight quantified
+weaknesses (\cref{sec:v1}).
+(iii) A hardened revision and a before/after comparison on identical scenarios
+(\cref{sec:v2}).
+(iv) A time-boxed public exposure whose trace is replayed through every
+policy (\cref{sec:real}).
+(v) Release of the harness, replay tooling and aggregate data.
+
+\noindent\textbf{Claim.} \emph{For a single-operator, Internet-exposed MCP
+endpoint, a lightweight application-layer gate combined with a
+high-entropy bearer token and a minimized tool surface stops declared
+crawlers, credential probing, path scanning and floods at microsecond
+cost with no false blocks on benign MCP sessions. It is effective only
+if its state is keyed on network sources rather than individual addresses
+and bounded in size. The token, not the gate, remains the security boundary.}
+
+% =====================================================================
+\section{System and Threat Model}\label{sec:design}
+
+\subsection{Deployment}
+The protected service is \kit{}, a personal tool gateway that exposes one
+29-tool catalog (DevOps monitoring, a shell assistant, a personal-memory
+agent, a breach monitor and a homelab reconnaissance agent) over stdio and
+MCP Streamable HTTP~\citep{mcpspec}. It is part of a broader personal
+automation stack that includes local model inference (Ollama on a 24\,GB
+Apple-silicon machine), a self-hosted Linux server (Docker, Grafana, Supabase)
+and a Tailscale mesh. A single operator cannot justify an enterprise gateway for
+this kind of stack, which motivates a lightweight, dependency-free gate.
+
+The HTTP server binds to loopback, and a
+\code{cloudflared} tunnel~\citep{cftunnel} is the only path from the Internet
+(\cref{fig:arch}). The socket peer is therefore always loopback, so the client
+identity is taken from the \code{CF-Connecting-IP} header set at Cloudflare's
+edge~\citep{cfheaders}.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=3.2mm and 3mm, font=\scriptsize,
+  box/.style={draw=accent,rounded corners=2pt,fill=accent!6,align=center,minimum height=6mm,inner sep=2pt},
+  gate/.style={box,fill=warn!10,draw=warn},
+  arr/.style={-{Stealth[length=1.6mm]},thick,color=black!70}]
+\node[box] (net) {Internet clients\\(agents, crawlers,\\scanners, probers)};
+\node[box,right=of net] (cf) {Cloudflare edge\\sets \code{CF-Connecting-IP}};
+\node[box,right=of cf] (tun) {\code{cloudflared}\\tunnel};
+\node[gate,below=5mm of tun] (g) {\sys{} gate\\ban $\to$ bot-UA $\to$ rate};
+\node[gate,left=of g] (a) {Bearer auth\\+ auth-fail ban};
+\node[gate,left=of a] (f) {Tool filter\\(5 of 29 exposed)};
+\node[box,below=4mm of a] (d) {MCP dispatch $\to$ backends};
+\draw[arr] (net) -- (cf); \draw[arr] (cf) -- (tun); \draw[arr] (tun) -- (g);
+\draw[arr] (g) -- (a); \draw[arr] (a) -- (f); \draw[arr] (f) |- (d);
+\begin{scope}[on background layer]
+\node[draw=black!40,dashed,rounded corners,fit=(g)(a)(f)(d),inner sep=4pt,
+      label={[font=\scriptsize,color=muted]below:loopback-bound origin (\code{127.0.0.1})}] {};
+\end{scope}
+\end{tikzpicture}
+\caption{Deployment. The origin is reachable only through the tunnel, and all
+enforcement runs in-process before any tool code executes.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Threat model}
+Remote, unauthenticated adversaries send arbitrary HTTP requests through
+Cloudflare:
+(T1) \emph{declared} crawlers and scanners that name themselves in the
+\code{User-Agent};
+(T2) \emph{undeclared} crawlers that spoof a browser user-agent;
+(T3) credential probers using one or many sources;
+(T4) flooders;
+(T5) path scanners;
+(T6) adversaries who rotate addresses, for example within an IPv6 /64.
+The goals are to prevent unauthorized tool execution, bound the operator's
+resource cost and provide visibility. Out of scope: a compromised operator
+machine, Cloudflare itself, volumetric DDoS absorbed at the edge, and attacks
+by \emph{authorized} clients such as indirect prompt
+injection~\citep{greshake2023indirect}.
+
+\subsection{Guardian v1}
+\sys{} v1 (\code{guardian.py}, 263 lines, Python standard library only) makes
+one decision per request, before authentication or JSON-RPC parsing:
+\begin{enumerate}
+\item an unexpired ban returns \code{403};
+\item a case-insensitive match against 38 crawler and scanner signatures
+      (\code{gptbot}, \code{claudebot}, \code{ccbot}, \code{bytespider},
+      \code{sqlmap}, \code{nuclei}, \ldots) bans the client and returns
+      \code{403};
+\item more than 120 requests in 60\,s returns \code{429}~\citep{rfc6585}
+      without a ban.
+\end{enumerate}
+A bearer token~\citep{rfc6750} is then checked in constant time. Eight
+\code{401}s within 300\,s trigger a 60-minute ban, in the style of
+\texttt{fail2ban}~\citep{fail2ban} and in line with online-guessing
+guidance~\citep{nist80063b}. Bans and a JSONL access log are file-backed so
+that a separate stdio process can offer operator tools; rate counters live in
+memory. A \textbf{capability filter} removes all 15 \code{local\_only} tools
+(offensive recon, breach lookups, the \sys{} controls themselves) and an
+operator denylist from \code{tools/list} and \code{tools/call}.
+
+% =====================================================================
+\section{Evaluation Method}\label{sec:method}
+The harness (\code{artifact/harness2.py}) launches an unmodified server tree
+as a separate process on a private port, with a fresh 320-bit bearer token and
+a fresh state directory for every scenario. It emulates the Cloudflare hop by
+setting \code{CF-Connecting-IP} to documentation-range
+addresses~\citep{rfc5737,rfc3849} and replays the scenarios over HTTP/1.1. The
+\emph{identical} scenario set runs against the v1 tree (a byte-for-byte backup
+of the deployed code) and the v2 tree, under the shipped default policy.
+Latency is measured end to end on a keep-alive connection: 50 warm-up requests,
+then $3\times\num{1000}$ interleaved requests per condition, or 500 per point
+for ban-list scaling. Memory is measured with \code{tracemalloc} in a fresh
+interpreter. Platform: Apple M5 Pro, macOS 26.6.1, Python 3.12.13. Every number
+is read from \code{artifact/results\_v\{1,2\}.json}.
+
+% =====================================================================
+\section{Guardian v1: Effective, but Keyed on the Wrong Thing}\label{sec:v1}
+
+\finding{What works (RQ1).} On benign traffic, four MCP client user-agents
+completed the protocol handshake and 100/100 calls with no false blocks (S1).
+A client performing OAuth discovery and an SSE probe before connecting (S1b)
+was also unaffected. All 38 declared crawler and scanner signatures were
+blocked on the first request, and they stayed blocked after switching to a
+benign UA \emph{with the valid token} (S2). A single-source prober was banned
+on exactly its 8th failure (S4). A 300-request burst was held to exactly 120
+served, with no collateral effect on other clients and recovery after the
+window (S6). Over HTTP, \code{tools/list} returned 5 of 29 tools. Each of the
+15 \code{local\_only} tools was unlisted and returned JSON-RPC \code{-32601}
+when called directly (\code{artifact/surface.json}). The ablation with \sys{}
+disabled (S11) served the entire flood and answered every guess.
+
+\finding{What breaks (RQ2).}
+\textbf{W1}~Spoofed browser UAs evaded the signature rule 38/38 times (S3);
+the token still rejected all of them.
+\textbf{W2}~Spreading 700 guesses over 100 sources produced 0 bans and 700
+answered guesses (S5).
+\textbf{W3}~Each request re-parsed the whole ban file. Median latency rose
+from \SI{0.12}{\milli\second} with no bans to \SI{0.54}{}, \SI{3.99}{} and
+\SI{21.7}{\milli\second} at \num{1000}, \num{10000} and \num{50000} bans
+(\cref{fig:bans}).
+\textbf{W4}~Per-IP rate state was never evicted: \SI{87.4}{MB} for
+\num{100000} sources ($\sim$\SI{870}{B} each).
+\textbf{W5}~Rotating through 200 addresses in one IPv6 /64 created 200 ban
+entries (S12), which feeds W3. An end site typically holds at least a
+/64~\citep{rfc6177}, so this is cheap for an attacker.
+\textbf{W6}~Path scanning (S7) returned only \code{404}/\code{405} and was never
+penalized.
+\textbf{W7}~Eight mistyped tokens locked a legitimate user out for 60\,min
+(S8).
+\textbf{W8}~Several smaller gaps (S9--S11). \code{DELETE} bypassed the gate
+and was not logged. Banned clients could still make the server read 256\,KB
+bodies. On a non-loopback bind, such as the supported tailnet mode, forged
+\code{CF-Connecting-IP} headers evaded a ban 5 out of 5 times. With \sys{}
+disabled, unenforced ban records were still written.
+
+% =====================================================================
+\section{Hardening: Guardian v2}\label{sec:v2}
+Each weakness maps to a local change of a few lines (\cref{tab:fixes}); v2
+still uses only the standard library.
+
+\begin{table}[t]
+\centering\small
+\caption{v2 changes, each tied to a measured v1 weakness.}
+\label{tab:fixes}
+\begin{tabularx}{\columnwidth}{@{}lX@{}}
+\toprule
+W & Change in v2 \\
+\midrule
+W3 & Ban list cached in memory; reloaded only when the file's \code{mtime} changes \\
+W5 & All state keyed on a \emph{source}: IPv4 address or IPv6 /64 \\
+W4 & Idle keys dropped; LRU cap of \num{20000} tracked sources \\
+W2 & Global auth-failure alarm (>40 per 300\,s) tightens the per-source threshold from 8 to 3 \\
+W7 & Auth-failure bans back off exponentially from 5\,min; optional operator allowlist \\
+W6 & Six non-benign \code{404}s per 300\,s ban the source (OAuth discovery and favicon exempt) \\
+W8 & Every method gated and logged; gate runs before the body is read; forwarding headers trusted only from a loopback peer; nothing written when disabled \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table*}[t]
+\centering\small
+\caption{Before/after on identical scenarios (default policy: 120 req/60\,s;
+8 auth failures/300\,s; 38 signatures). Bold marks a changed outcome.}
+\label{tab:ba}
+\begin{tabularx}{\textwidth}{@{}l X X X@{}}
+\toprule
+\# & Scenario & v1 (deployed) & v2 (hardened) \\
+\midrule
+S1  & Benign MCP sessions, 4 clients, 100 req & 100/100 served, 0 bans & 100/100 served, 0 bans \\
+S1b & Benign client: OAuth discovery + SSE probe, then call & 20$\times$\code{405}; call \code{200}; 0 bans & 16$\times$\code{404}, 4$\times$\code{405}; call \code{200}; 0 bans \\
+S2  & 38 declared crawler/scanner UAs & 38/38 blocked on first request; still blocked with valid token & same \\
+S3  & Same crawlers, spoofed browser UA & 0/38 caught by UA rule; 38/38 \code{401} & same (not addressable at this layer) \\
+S4  & One source, 20 wrong tokens & banned at attempt 8; ban 60\,min & banned at attempt 8; \textbf{ban 5\,min (backs off)} \\
+S5  & 100 sources $\times$ 7 wrong tokens & 700 answered, \textbf{0 bans} & \textbf{323 answered, 377 blocked, 95 bans} \\
+S6  & 300-request burst, one source & 120 served, 180 \code{429}; recovers at 61\,s & same \\
+S7  & Path scan, 10 paths $\times$ \{GET, POST\} & 10$\times$\code{404}, 10$\times$\code{405}; 0 bans & \textbf{banned at 6th \code{404}; 14/20 blocked} \\
+S8  & Legit user, 8 typos, then correct token & locked out 60\,min & \textbf{locked out 5\,min} \\
+S8b & Same, operator address allowlisted & locked out 60\,min (no allowlist) & \textbf{never banned; call \code{200}} \\
+S9  & Banned client: \code{DELETE}; 300\,KB body & \code{200}, unlogged; body read (\code{413}) & \textbf{\code{403}, logged; body unread (\code{403})} \\
+S10 & Non-loopback peer forging client IP & \textbf{5/5 forged identities evade ban} & \textbf{0/5; ban keyed on real peer} \\
+S12 & 200 bot requests rotating inside one /64 & \textbf{200 ban entries} & \textbf{1 ban}; 20/20 further addresses in /64 blocked; neighbouring /64 unaffected \\
+S11 & Guardian disabled (ablation) & flood served; 1 unenforced ban record & flood served; 0 records \\
+\midrule
+E2 & Median latency, 0 / 1k / 10k / 50k bans & 0.12 / 0.54 / 3.99 / \textbf{21.7}\,ms & 0.13 / 0.13 / 0.13 / \textbf{0.13}\,ms \\
+E2 & Gate overhead (median, empty ban list) & +\SI{5}{\micro\second} (0.119$\to$0.124\,ms) & +\SI{9}{\micro\second} (0.121$\to$0.130\,ms) \\
+E3 & Rate-state memory at 1k / 10k / 100k sources & 0.86 / 8.56 / \textbf{87.4}\,MB & 0.91 / 9.01 / \textbf{18.8}\,MB (capped at 20k keys) \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\columnwidth, height=4.4cm,
+  xlabel={Active bans}, ylabel={Median latency (ms)},
+  xmin=-2000, xmax=52000, ymin=0, ymax=25, scaled x ticks=false,
+  xtick={0,10000,20000,30000,40000,50000}, xticklabels={0,10k,20k,30k,40k,50k},
+  grid=major, grid style={black!10},
+  legend pos=north west, legend style={font=\scriptsize,draw=none,fill=none},
+  tick label style={font=\scriptsize}, label style={font=\small}]
+\addplot[bad,thick,mark=*,mark size=1.6pt] coordinates
+  {(0,0.122) (1000,0.542) (10000,3.986) (50000,21.688)};
+\addlegendentry{v1: re-parse per request}
+\addplot[good,thick,mark=square*,mark size=1.5pt] coordinates
+  {(0,0.129) (1000,0.129) (10000,0.129) (50000,0.128)};
+\addlegendentry{v2: mtime-cached}
+\end{axis}
+\end{tikzpicture}
+\caption{Request latency against ban-list size ($n{=}500$ per point). v1
+grows linearly (${\approx}\SI{0.43}{\micro\second}$ per entry). v2 is flat,
+$169\times$ faster at 50k bans.}
+\label{fig:bans}
+\end{figure}
+
+\finding{Results (RQ3).} \Cref{tab:ba} gives the full comparison. Every
+targeted weakness changed as intended, and the benign scenarios (S1, S1b) were
+unchanged: no false blocks, and OAuth-discovery 404s are not treated as
+scanning. The costs are small and measurable. v2 adds \SI{4}{\micro\second} of
+median overhead over v1. Memory per tracked key rises slightly (${\approx}\SI{940}{B}$
+against \SI{870}{B}), but the total is now bounded.
+
+\finding{Trade-offs.} Keying on /64 means that separate customers who share a
+/64, which some hosting providers do, share a fate. The global alarm lets a
+distributed attacker tighten the threshold for everyone for up to 300\,s. The
+worst case is a legitimate user needing 3 attempts instead of 8, which the
+allowlist removes. The LRU cap means an attacker with more than \num{20000}
+active sources can push out counters. Bans are persisted separately and are
+not evicted.
+
+% =====================================================================
+\section{Real-World Exposure}\label{sec:real}
+\noindent\textbf{Method.} We exposed the endpoint running v2 at its public
+hostname for a fixed window. The server logged, for every request, the
+timestamp, client address, user-agent, method, path, status, the outcome of
+the authentication check and the declared body length. These are enough to
+re-decide each request under any policy. The analysis tool
+(\code{artifact/analyze\_trace.py}) replays the trace in timestamp order on
+the trace's own clock through three policies: no gate (auth only), v1 and v2.
+Each runs its own unmodified code tree with isolated state. We validated the
+replay against ground truth: on 1211 requests from the v2 harness logs, it
+reproduced the live server's status code for every request (1211/1211,
+\code{artifact/replay\_fidelity.json}). Operator traffic was excluded by
+user-agent. Only aggregates are published.
+
+\ifrealdata
+\RTCompositionTable
+\RTPolicyTable
+\noindent\textbf{Results (RQ4).} Over \RTHours\,h the endpoint received
+\RTRequests{} requests from \RTSources{} sources (\RTvSix{} IPv6 /64s). The
+ten busiest sources sent \RTTopTen{} of the traffic (\cref{tab:realcomp}).
+Replayed through each policy (\cref{tab:realpolicy}), v1 blocked
+\RTvOneBlocked{} requests at the gate and v2 blocked \RTvTwoBlocked{}. The
+share of non-MCP-client requests stopped before authentication was
+\RTvOneUnwantedPct{} and \RTvTwoUnwantedPct{} respectively. With no gate,
+\RTNoneAuth{} requests reached the authentication layer, compared with
+\RTvOneAuth{} under v1 and \RTvTwoAuth{} under v2.
+The composition and policy comparison are discussed in \cref{tab:realcomp,tab:realpolicy}.
+\else
+The exposure study is in progress at the time of writing; results will be
+incorporated when the observation window closes. The methodology and replay
+tooling are complete and validated (1211/1211 exact status match on harness
+traffic).
+\fi
+
+% =====================================================================
+\section{Related Work}
+
+\finding{MCP threat landscape.}
+Hou et al.~\citep{hou2025mcp} give the first survey of MCP security threats and
+future directions. Javed et al.~\citep{mcpthreatmodel2026} apply STRIDE and
+DREAD threat modeling across five MCP components and identify tool poisoning as
+the most prevalent client-side vulnerability. The NSA's AI Security Center
+published the first US government guidance on MCP
+security~\citep{nsamcp2026}, warning that adoption has outpaced safeguards and
+recommending controls including input screening, least-privilege interfaces,
+audit logging, and overload protection. The Cloud Security Alliance provides
+complementary practitioner guidance~\citep{csamcp2026}. OWASP catalogues
+broader LLM application risks~\citep{owaspllm2025}, and Bajpai
+et al.~\citep{mcpsafetyaudit2025} demonstrate major exploits against MCP-enabled
+LLM systems.
+
+\finding{Post-authentication attacks.}
+The largest body of MCP security research studies what an authorized or
+compromised client can do once inside. MCPTox~\citep{mcptox2025} benchmarks
+tool poisoning across 45 live servers and 353 tools, finding attack success
+rates above 72\%. MCP-ITP~\citep{mcpitp2026} automates implicit tool poisoning
+generation in a black-box setting. TrustShiftProbe~\citep{trustshift2026}
+characterizes staged trust-escalation attacks. Indirect prompt
+injection~\citep{greshake2023indirect} targets authorized data paths. Our
+threat model explicitly excludes all of these: we study the \emph{pre-authentication}
+admission layer, not the post-authentication trust boundary.
+
+\finding{Defense mechanisms.}
+CASCADE~\citep{cascade2026} proposes a three-tiered local defense for
+prompt-injection detection in MCP systems (regex and entropy pre-filtering,
+semantic analysis, output filtering), evaluated on 5{,}000 samples at 95.85\%
+precision. Tamayo~\citep{tamayo2026slr} surveys 73 studies and categorizes
+existing MCP defenses into static analysis, runtime guardrails, middleware
+access control and formal verification.
+None of the 73 surveyed studies measures an admission-layer defense for an
+Internet-exposed MCP endpoint.
+
+\finding{Established network defense.}
+Log-driven banning~\citep{fail2ban} and throttling of online
+guessing~\citep{nist80063b} are long established. Crawler consent rests on
+convention~\citep{rfc9309}, and restrictions aimed at AI crawlers have grown
+sharply~\citep{longpre2024consent}. Our S3 result confirms that
+convention-based identification cannot be relied on.
+
+\finding{Gap.}
+Prior work on MCP security either catalogues threats, studies post-authentication
+attacks, or prescribes controls without empirical measurement. We contribute a
+measured, before/after evaluation of admission-layer defense on a deployed,
+Internet-facing MCP endpoint, show where per-address state fails, and quantify
+the cost of fixes on identical workloads.
+
+% =====================================================================
+\section{Limitations}
+This is a single-system, single-operator study. Controlled experiments ran on
+loopback with an emulated Cloudflare hop, so edge behaviour is assumed rather
+than measured, and the latency figures exclude network and tunnel time. The
+benign workload covers five client behaviours but not long-running SSE sessions
+or concurrent multi-client scenarios. The v2 defaults (the /64 prefix, the 20k
+cap and the global-alarm thresholds) are reasonable choices, not tuned optima.
+The real-traffic window covers a single hostname whose discoverability depends
+on certificate-transparency logs and DNS enumeration by third parties. The
+techniques evaluated (rate limiting, UA signature blocking, auth-failure banning)
+are individually well established~\citep{fail2ban,nist80063b}; the contribution
+is their measured application and failure modes in the MCP context, not the
+techniques themselves.
+
+\section{Conclusion}
+A few hundred lines of dependency-free code in front of an MCP endpoint,
+together with a strong token and a minimized tool surface, measurably stop
+declared crawlers, credential probing, path scanning and floods at
+microsecond cost. The first version failed where its state was keyed on
+individual addresses and allowed to grow without bound. Distributed and
+rotating adversaries slipped through, and a growing ban list turned the
+defense into a latency liability. Keying on network sources and bounding
+state fixed each measured failure without new false blocks. Self-hosted agent
+endpoints should treat such gates as cost and visibility controls, and never
+as the authentication boundary.
+
+\smallskip\noindent\textbf{Artifact.} \code{artifact/}: \code{harness2.py},
+\code{harness.py} and \code{surface.py} (tool surface), \code{analyze\_trace.py}, \code{gen\_realtraffic\_tex.py},
+\code{results\_v1.json}, \code{results\_v2.json}, \code{surface.json},
+\code{replay\_fidelity.json}, and aggregate \code{real\_traffic.json};
+\url{https://github.com/TGvenomYT/agent-endpoint-defense}.
+
+\smallskip\noindent\textbf{Ethics.} Controlled experiments targeted only the
+author's own software, using documentation-range addresses. The public
+exposure passively logged requests sent to the author's own hostname. No
+third-party system was probed and no traffic source was attacked. Raw logs,
+which contain client IP addresses, are kept private and deleted after
+analysis. Only aggregates are released.
+
+\balance
+\small
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}

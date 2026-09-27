@@ -1,0 +1,23 @@
+{
+ "registry_total": null,
+ "http_listed": 5,
+ "local_only": 15,
+ "local_only_leaked_in_list": [],
+ "local_only_call_error_codes": {
+  "blackwall_bruteforce": -32601,
+  "blackwall_discover": -32601,
+  "blackwall_exploit": -32601,
+  "blackwall_portscan": -32601,
+  "blackwall_vuln_scan": -32601,
+  "blackwall_web_attack": -32601,
+  "blackwall_web_enum": -32601,
+  "blackwall_web_probe": -32601,
+  "breach_check_email": -32601,
+  "breach_check_password": -32601,
+  "breach_scan_me": -32601,
+  "guardian_block": -32601,
+  "guardian_recent": -32601,
+  "guardian_status": -32601,
+  "guardian_unblock": -32601
+ }
+}

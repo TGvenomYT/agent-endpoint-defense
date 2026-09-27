@@ -1,0 +1,79 @@
+% =====================================================================
+%  preamble.tex — shared preamble for the agent-endpoint defense paper
+%  Compile with pdflatex/latexmk or tectonic:  tectonic main.tex
+% =====================================================================
+
+% ---------- Page geometry & fonts ----------
+\usepackage[a4paper,margin=0.75in,columnsep=0.28in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{newtxtext,newtxmath}      % Times-like text + matching math
+\usepackage[scaled=0.85]{beramono}    % readable monospace for code/paths
+\usepackage{microtype}                % better justification/protrusion
+
+% ---------- Math, units, numbers ----------
+\usepackage{amsmath}
+\usepackage{siunitx}
+\sisetup{group-separator={,},group-minimum-digits=4,detect-all}
+
+% ---------- Tables ----------
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{makecell}
+\renewcommand{\arraystretch}{1.12}
+
+% ---------- Figures & plots ----------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[font=small,labelfont=bf,skip=4pt]{caption}
+\usepackage{subcaption}
+
+% ---------- Lists, code, misc ----------
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\footnotesize,columns=fullflexible,
+        breaklines=true,frame=single,framerule=0.3pt,rulecolor=\color{black!30},
+        xleftmargin=2pt,xrightmargin=2pt,aboveskip=4pt,belowskip=4pt}
+\usepackage{balance}                  % balance last-page columns
+
+% ---------- Colour palette ----------
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{good}{HTML}{2E7D32}
+\definecolor{bad}{HTML}{B71C1C}
+\definecolor{warn}{HTML}{E65100}
+\definecolor{muted}{HTML}{5F6368}
+
+% ---------- Section styling ----------
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\large\bfseries\color{accent}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.1ex plus .3ex}{0.6ex}
+\titlespacing*{\subsection}{0pt}{0.9ex plus .2ex}{0.4ex}
+
+% ---------- Bibliography ----------
+\usepackage[numbers,sort&compress]{natbib}
+\setlength{\bibsep}{2pt plus 0.3ex}
+
+% ---------- Hyperlinks (load late) ----------
+\usepackage[hidelinks,pdfusetitle]{hyperref}
+\usepackage{url}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% ---------- Project macros ----------
+\newcommand{\sys}{\textsc{Guardian}}
+\newcommand{\kit}{\texttt{agentkit}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\us}{\,\si{\micro\second}}
+\newcommand{\ms}{\,\si{\milli\second}}
+\newcommand{\pass}{\textcolor{good}{\ding{51}}}
+\newcommand{\fail}{\textcolor{bad}{\ding{55}}}
+\usepackage{pifont}
+% Red, unmissable placeholder — search for "\placeholder" before submitting.
+\newcommand{\placeholder}[1]{\textcolor{bad}{\textbf{[#1]}}}
+\newcommand{\finding}[1]{\par\smallskip\noindent\textbf{\textcolor{accent}{#1}}\ }
