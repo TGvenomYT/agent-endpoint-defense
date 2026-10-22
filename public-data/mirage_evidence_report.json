@@ -1,0 +1,24 @@
+{
+  "total_records": 1914,
+  "benign": {
+    "requests": 1800,
+    "false_shadowed": 0,
+    "false_shadow_rate_pct": 0.0
+  },
+  "low_and_slow": {
+    "requests": 60,
+    "first_shadow_at_call": 8,
+    "served_real_before_containment": 8
+  },
+  "overt": {
+    "requests": 30,
+    "first_shadow_at_call": 0,
+    "real_leaks_after_containment": 0
+  },
+  "overall_lane_mix": {
+    "primary": 1831,
+    "throttled": 1,
+    "shadow": 1,
+    "deception": 81
+  }
+}

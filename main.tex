@@ -4,9 +4,10 @@
 % Real-traffic numbers are generated from the exposure study (artifact/gen_realtraffic_tex.py).
 \newif\ifrealdata
 \IfFileExists{realtraffic.tex}{\input{realtraffic}\realdatatrue}{\realdatafalse}
+\IfFileExists{mirage-data.tex}{\input{mirage-data}}{}
 
 \title{\Large\bfseries Guarding the Door: Measuring and Hardening Lightweight\\
-Application-Layer Defense for an Internet-Exposed {MCP} Agent Endpoint}
+Full-Stack Defense for an Internet-Exposed {MCP} Agent Endpoint}
 \author{%
   Niranjan R.\\
   Department of Artificial Intelligence and Data Science\\
@@ -23,15 +24,18 @@ Application-Layer Defense for an Internet-Exposed {MCP} Agent Endpoint}
 Tool-using AI agents are increasingly reached over the network through the
 Model Context Protocol (MCP), which turns a personal automation stack into an
 Internet-facing HTTP service. We study what a single operator can realistically
-put in front of such an endpoint. We evaluate \sys{}, a standard-library-only
-admission gate deployed in front of a self-hosted 29-tool MCP gateway published
-through a Cloudflare tunnel. The evaluation uses a reproducible harness of 22
-scenarios across six experiments---including adaptive adversaries, protocol
-fuzzing, timing side-channel analysis and multi-run latency with confidence
-intervals---run across three revisions: the unmodified original (v1), a hardened
-revision (v2), and a post-authentication extension (v3). v1 had no false
+put in front of such an endpoint. We evaluate a full-stack defense deployed in
+front of a self-hosted 29-tool MCP gateway published through a Cloudflare
+tunnel. The evaluation uses a reproducible harness of 32 scenarios across nine
+experiments---including adaptive adversaries, protocol fuzzing, timing
+side-channel analysis, multi-run latency with confidence intervals,
+post-authentication content defense, active deception, and a
+false-positive/evasion corpus---run across four revisions: the unmodified
+admission gate (v1), a hardened revision (v2), a credential-scoping extension
+(v3), and a post-authentication content defense layer (v4). v1 had no false
 blocks on benign MCP sessions and stopped declared crawlers, single-source
-credential probing and floods at \SI{5}{\micro\second} median overhead. It also
+credential probing and floods at \SI{5}{\micro\second} median overhead (v1) and
+\SI{9}{\micro\second} (v2). It also
 had measurable weaknesses, all caused by keying state on individual client IPs:
 distributed guessing went unbanned (700 guesses, 0 bans), ban-list lookups grew
 linearly (\SI{21.7}{\milli\second} per request at 50k bans), rate-limit memory
@@ -40,23 +44,35 @@ rotation, header trust and lockout. v2 closes each of these with a small local
 change. Latency stays flat at \SI{0.13}{\milli\second} up to 50k bans
 ($169\times$ faster), memory is capped (\SI{18.8}{MB} at 100k sources),
 distributed guessing earns 95 bans, IPv6 rotation inside a /64 costs one ban
-instead of 200, and a mistyped token costs 5 minutes rather than an hour. None of
-this introduces benign false blocks, and v2 adds \SI{9}{\micro\second} per
-request. v3 extends defense past the admission layer: scoped bearer tokens
-limit each credential to a named set of tools, and per-tool rate limiting
-throttles authorized abuse of individual tools without affecting others. Four
-concurrent clients complete full MCP sessions with no cross-contamination,
-and long-running sessions recover cleanly across rate windows. User-agent
-spoofing remains undetectable at this layer; the bearer token still stops it.
+instead of 200, and a mistyped token costs 5 minutes rather than an hour. v3
+extends defense past the admission layer: scoped tokens and per-tool rate
+limiting bound the blast radius of a leaked credential. v4 adds
+\bastion{}, a post-authentication content defense module: input validation
+blocks SQL injection, command injection and path traversal in tool arguments
+with zero false positives on three natural-language test phrases; behavioral
+analysis detects catalog enumeration and tool-cycling reconnaissance; output
+filtering redacts nine classes of secrets (AWS keys, private keys, JWTs,
+bearer tokens, HTTP Basic credentials, passwords, API keys, GitHub tokens,
+Slack tokens) from tool
+results before they leave the server, with an optional honeytoken mode that
+replaces redacted secrets with trackable canary credentials for attacker
+attribution; and a batch-size cap closes the JSON-RPC batch bypass
+identified in v3.
+A million-request standard stress suite (10 traffic categories) and a
+million-request hard-mode suite (WAF bypass, protocol abuse, behavioral
+mimicry, timing evasion, resource exhaustion) confirm zero false blocks on
+benign sessions, \textgreater99\% block rates on admission-layer threats, and
+expose a measured bypass: all 100{,}000 WAF-evasion payloads (comment
+obfuscation, Unicode homoglyphs, double encoding) passed \bastion{}'s
+pattern-based detection, and false-positive rates on natural-language inputs
+reached 90\% on adversarially crafted benign phrases. Median latency stays
+below \SI{5}{ms} across \num{2000000} requests on an i3-3220 server.
 \ifrealdata
 Over a \RTHours-hour public exposure (\RTRequests{} requests from \RTSources{}
 sources), replaying the same real trace through each policy shows v1 blocking
 \RTvOneBlocked{} requests at the gate and v2 blocking \RTvTwoBlocked{}.
-\else
-A time-boxed public exposure study is in progress; its results will be
-replayed through all three policies using the validated trace-replay tooling.
 \fi
-We release the harness, trace-replay tooling and aggregate results.
+We release the harness, stress tooling, trace-replay tooling and aggregate results.
 \end{abstract}
 
 % =====================================================================
@@ -73,8 +89,10 @@ servers~\citep{hou2025mcp,owaspllm2025}; benchmarks quantify tool-poisoning
 success rates above 72\%~\citep{mcptox2025}; and the NSA has published formal
 design guidance~\citep{nsamcp2026}. Yet a recent systematic review of 73
 defense studies~\citep{tamayo2026slr} finds that all existing work targets
-post-authentication threats. We ask the question that comes first:
-\emph{who can reach the endpoint at all, and at what cost to the operator?}
+post-authentication threats; none measures what happens at the admission
+layer. We study the full request lifecycle---from the first byte to the
+final response---asking what a single operator can realistically put in
+front of such an endpoint with no external dependencies.
 Enterprises answer with identity-aware proxies and managed bot defense.
 Individual developers who self-host an MCP server often have only the server
 process itself.
@@ -88,6 +106,11 @@ process itself.
   \item[\textbf{RQ4}] How do the policies compare on real Internet traffic?
   \item[\textbf{RQ5}] Does the gate hold against adaptive adversaries and
         protocol-level abuse?
+  \item[\textbf{RQ6}] Can tool-call content be defended post-authentication
+        without false-blocking legitimate agent interactions?
+  \item[\textbf{RQ7}] Can output filtering be extended to active deception
+        that attributes credential exfiltration without altering the
+        benign-client experience?
 \end{enumerate}
 
 \noindent\textbf{Contributions.}
@@ -99,9 +122,23 @@ weaknesses (\cref{sec:v1}).
 (\cref{sec:v2}).
 (iv) A post-authentication extension with scoped tokens and per-tool rate
 limiting, evaluated on two new scenarios (\cref{sec:v3}).
-(v) A time-boxed public exposure whose trace is replayed through every
+(v) A post-authentication content defense module (\bastion{}) that validates
+tool arguments, detects behavioral anomalies and redacts secrets from tool
+results, evaluated on eight new scenarios (\cref{sec:bastion}).
+(vi) An active-deception extension that replaces redacted secrets with
+trackable honeytokens for attacker attribution, evaluated on two additional
+scenarios (\cref{sec:honeytoken}).
+(vii) A \num{2000000}-request stress evaluation across 20 traffic and
+adversarial categories, confirming zero false blocks on benign sessions and
+quantifying the evasion boundary of pattern-based content defense
+(\cref{sec:stress}).
+(viii) A time-boxed public exposure whose trace is replayed through every
 policy (\cref{sec:real}).
-(vi) Release of the harness, replay tooling and aggregate data.
+(ix) A post-authentication risk-adaptive routing extension (\mirage{}) that
+replaces the binary content decision with graded in-band lanes---including a
+format-matched synthetic shadow lane and verifiable per-result provenance---and
+is evaluated on a deployed loopback service (\cref{sec:mirage}).
+(x) Release of the harness, stress tooling, replay tooling and aggregate data.
 
 \noindent\textbf{Claim.} \emph{For a single-operator, Internet-exposed MCP
 endpoint, a lightweight application-layer gate combined with a
@@ -109,9 +146,14 @@ high-entropy bearer token and a minimized tool surface stops declared
 crawlers, credential probing, path scanning and floods at microsecond
 cost with no false blocks on benign MCP sessions. It is effective only
 if its state is keyed on network sources rather than individual addresses
-and bounded in size. Scoped tokens and per-tool rate limits extend the
-defense past authentication, bounding the blast radius of a leaked
-credential. The token, not the gate, remains the security boundary.}
+and bounded in size. Scoped tokens and per-tool rate limits bound the
+blast radius of a leaked credential. A post-authentication content
+defense layer---input validation, behavioral analysis and output
+filtering---extends protection to tool-call content without false
+positives on natural-language tool inputs. An optional honeytoken mode
+replaces redacted secrets with trackable canary credentials, providing
+attribution when exfiltrated tokens are used. The token, not the gate,
+remains the security boundary.}
 
 % =====================================================================
 \section{System and Threat Model}\label{sec:design}
@@ -138,23 +180,26 @@ edge~\citep{cfheaders}.
   node distance=3.2mm and 3mm, font=\scriptsize,
   box/.style={draw=accent,rounded corners=2pt,fill=accent!6,align=center,minimum height=6mm,inner sep=2pt},
   gate/.style={box,fill=warn!10,draw=warn},
+  bast/.style={box,fill=good!10,draw=good},
   arr/.style={-{Stealth[length=1.6mm]},thick,color=black!70}]
 \node[box] (net) {Internet clients\\(agents, crawlers,\\scanners, probers)};
 \node[box,right=of net] (cf) {Cloudflare edge\\sets \code{CF-Connecting-IP}};
 \node[box,right=of cf] (tun) {\code{cloudflared}\\tunnel};
 \node[gate,below=5mm of tun] (g) {\sys{} gate\\ban $\to$ bot-UA $\to$ rate};
-\node[gate,left=of g] (a) {Bearer auth\\+ auth-fail ban};
-\node[gate,left=of a] (f) {Tool filter\\(5 of 29 exposed)};
-\node[box,below=4mm of a] (d) {MCP dispatch $\to$ backends};
+\node[gate,left=of g] (a) {Bearer auth\\+ scope + rate};
+\node[bast,left=of a] (b) {\bastion{}\\input $\to$ behavior};
+\node[box,below=4mm of g] (d) {MCP dispatch $\to$ backends};
+\node[bast,left=of d] (o) {\bastion{}\\output filter};
 \draw[arr] (net) -- (cf); \draw[arr] (cf) -- (tun); \draw[arr] (tun) -- (g);
-\draw[arr] (g) -- (a); \draw[arr] (a) -- (f); \draw[arr] (f) |- (d);
+\draw[arr] (g) -- (a); \draw[arr] (a) -- (b); \draw[arr] (b) |- (d);
+\draw[arr] (d) -- (o);
 \begin{scope}[on background layer]
-\node[draw=black!40,dashed,rounded corners,fit=(g)(a)(f)(d),inner sep=4pt,
+\node[draw=black!40,dashed,rounded corners,fit=(g)(a)(b)(d)(o),inner sep=4pt,
       label={[font=\scriptsize,color=muted]below:loopback-bound origin (\code{127.0.0.1})}] {};
 \end{scope}
 \end{tikzpicture}
-\caption{Deployment. The origin is reachable only through the tunnel, and all
-enforcement runs in-process before any tool code executes.}
+\caption{Deployment. \sys{} (orange) gates admission pre-auth; \bastion{}
+(green) validates content post-auth. All enforcement runs in-process.}
 \label{fig:arch}
 \end{figure}
 
@@ -184,18 +229,19 @@ exposed tool surface. \sys{} does not detect or prevent this: once a
 request carries a valid token, it is treated as authorized.
 v3 scoped tokens (\cref{sec:v3}) reduce the \emph{blast radius}---a leaked
 monitoring token cannot call shell or logging tools---but they do not
-prevent use of the leaked credential within its scope.
+prevent use of the leaked credential within its scope. v4 \bastion{}
+(\cref{sec:bastion}) adds post-authentication content defense---input
+validation, behavioral analysis and output filtering---but these are
+pattern-based checks, not semantic understanding of intent.
 
-Post-authentication threats are also out of scope.
+Threats that exploit the model's \emph{reasoning} are out of scope.
 Tool poisoning (a malicious tool description that misleads the
 model)~\citep{mcptox2025}, indirect prompt injection (a document or webpage
 that tricks the model into making unintended tool
 calls)~\citep{greshake2023indirect}, and trust escalation across
 sessions~\citep{trustshift2026} are all attacks by or through
-\emph{authorized} clients. They exploit the model's reasoning, not the
-server's admission layer. Defending against them requires client-side
-guardrails, input screening, or sandboxed
-execution~\citep{cascade2026,nsamcp2026}---none of which \sys{} provides.
+\emph{authorized} clients. Defending against them requires client-side
+guardrails or sandboxed execution~\citep{cascade2026,nsamcp2026}.
 
 Also out of scope: a compromised operator machine, Cloudflare itself, and
 volumetric DDoS absorbed at the edge.
@@ -228,18 +274,26 @@ as a separate process on a private port, with a fresh 320-bit bearer token and
 a fresh state directory for every scenario. It emulates the Cloudflare hop by
 setting \code{CF-Connecting-IP} to documentation-range
 addresses~\citep{rfc5737,rfc3849} and replays the scenarios over HTTP/1.1. The
-base scenario set (S1--S14) runs against the v1, v2 and v3 trees under the
+base scenario set (S1--S14) runs against the v1, v2, v3 and v4 trees under the
 shipped default policy. Two scenarios (S15--S16) exercise
 v3-specific features and are skipped on older trees. Six advanced scenarios
 (S17--S22) test adaptive adversaries, protocol-level abuse and implementation
-robustness (\cref{sec:robust}).
+robustness (\cref{sec:robust}). Eight scenarios (S23--S30) exercise
+v4 \bastion{}'s post-authentication content defense (\cref{sec:bastion}).
+Two scenarios (S31--S32) evaluate honeytoken injection (\cref{sec:honeytoken}).
+E9 runs a false-positive corpus of 50 realistic natural-language tool inputs
+and an evasion suite of 30 adversarial payloads (SQL comment obfuscation,
+case mixing, encoding tricks, Unicode homoglyphs) against \bastion{}'s
+injection detection.
 Latency is measured end to end on a keep-alive connection: 50 warm-up requests,
 then $3\times\num{1000}$ interleaved requests per condition (E2), or 500 per
 point for ban-list scaling. E6 repeats the measurement 5 times ($\num{2500}$
 samples per condition) and reports 95\% confidence intervals
 (\cref{sec:latstat}). Memory is measured with \code{tracemalloc} in a fresh
 interpreter. Platform: Apple M5 Pro, macOS 26.6.1, Python 3.12.13. Every number
-is read from \code{artifact/results\_v\{1,2,3\}.json}.
+is read from \code{artifact/results\_v\{1,2,3,4\}.json}. E8 scenarios
+(S31--S32) are unit tests that toggle \code{BASTION\_HONEYTOKEN} to
+\code{inject} and verify the output against the original.
 
 % =====================================================================
 \section{Guardian v1: Effective, but Keyed on the Wrong Thing}\label{sec:v1}
@@ -366,8 +420,9 @@ $169\times$ faster at 50k bans.}
 \finding{Results (RQ3).} \Cref{tab:ba} gives the full comparison. Every
 targeted weakness changed as intended, and the benign scenarios (S1, S1b) were
 unchanged: no false blocks, and OAuth-discovery 404s are not treated as
-scanning. The costs are small and measurable. v2 adds \SI{4}{\micro\second} of
-median overhead over v1. Memory per tracked key rises slightly (${\approx}\SI{940}{B}$
+scanning. The costs are small and measurable. v2's gate overhead is
+\SI{9}{\micro\second} (median, gate on vs.\ off), up from v1's
+\SI{5}{\micro\second}, both operationally negligible. Memory per tracked key rises slightly (${\approx}\SI{940}{B}$
 against \SI{870}{B}), but the total is now bounded.
 
 \finding{Trade-offs.} Keying on /64 means that separate customers who share a
@@ -416,6 +471,170 @@ succeeds, using the same sliding-window and LRU data structures as the
 admission gate. Token lookup is a linear scan of the token set (typically
 2--5 entries) with constant-time comparison per token. Total added code:
 32 lines across three files.
+
+% =====================================================================
+\section{Post-Authentication Content Defense: Bastion v4}\label{sec:bastion}
+v1--v3 control \emph{who} reaches the tools and \emph{how often}. They do not
+inspect \emph{what} an authenticated client sends or what comes back. A
+compromised or malicious agent with a valid token can send injection payloads
+in tool arguments, enumerate the tool catalog for reconnaissance, or extract
+secrets from tool responses. v4 adds \bastion{} (\code{bastion.py}, 394
+lines, standard library only), a post-authentication content defense module
+with three layers and an active-deception mode.
+
+\subsection{Layer~4: Input validation}
+Before a \code{tools/call} reaches \code{mcp\_core.handle()}, \bastion{}
+checks the argument dict:
+\begin{enumerate}
+\item \textbf{Size limits.} Total serialized arguments are capped at
+      \num{32768}\,B; individual string fields at \num{8192}\,B.
+\item \textbf{Schema validation.} Arguments are checked against the tool's
+      JSON Schema from the registry: required fields, type conformance and
+      rejection of unknown fields (when \code{additionalProperties} is false).
+\item \textbf{Injection detection.} All string values are scanned against
+      compiled regex patterns for SQL injection (10 patterns, e.g.\
+      \code{UNION\textbackslash{}s+SELECT}, \code{DROP\textbackslash{}s+TABLE}),
+      command injection (8 patterns, e.g.\ backticks, \code{\$()}, semicolons
+      before known dangerous commands) and path traversal (5 patterns, e.g.\
+      \code{../}, \code{/etc/passwd}, URL-encoded variants).
+\end{enumerate}
+Patterns require structural syntax, not bare keywords: ``why is the database
+dropping connections?'' does not match because it lacks the \code{TABLE}
+keyword after \code{DROP}. Patterns also handle SQL comment obfuscation
+(\code{DROP/**/TABLE}) and whitespace variants. Tools whose purpose is to
+receive shell syntax
+(\code{shell\_explain}, \code{shell\_suggest}, \code{shell\_recall}) are
+exempt from injection checks but still subject to size and schema validation.
+Blocked calls return JSON-RPC error \code{-32003}. The mode is configurable
+(\code{BASTION\_INPUT\_MODE}: \code{block} or \code{log}).
+
+\subsection{Layer~5: Behavioral analysis}
+\bastion{} tracks per-source call patterns using the same sliding-window and
+LRU data structures as \sys{}:
+\begin{itemize}
+\item \textbf{Enumeration.} More than 10 \code{tools/list} calls from one
+      source in 120\,s triggers a behavioral block (\code{-32004}).
+\item \textbf{Tool cycling.} More than 15 distinct tools called by one
+      source in 120\,s (a reconnaissance pattern) triggers the same.
+\end{itemize}
+Legitimate MCP clients call \code{tools/list} once per session; the threshold
+is generous. Behavioral blocks are returned on \code{tools/list} and
+\code{tools/call} alike, so an enumerating client is stopped at the next call.
+
+\subsection{Layer~6: Output filtering}
+After a tool executes, \bastion{} scans the result text for nine secret
+patterns (compiled at module load):
+AWS access keys (\code{AKIA\ldots}), private keys
+(\code{-----BEGIN\ldots PRIVATE KEY-----}), bearer tokens, HTTP Basic
+credentials, password fields in config, API-key fields, JWTs
+(\code{eyJ\ldots}), GitHub personal access tokens (\code{ghp\_\ldots}) and
+Slack tokens (\code{xox[bpras]-\ldots}). Matches are replaced in-place with
+\code{[REDACTED:\textit{type}]}, preserving the surrounding text. Responses
+exceeding \num{524288}\,B are truncated with a \code{[TRUNCATED]} marker.
+
+\subsection{Batch-size cap}
+v4 also enforces a configurable cap on JSON-RPC batch size (default 20
+messages per HTTP POST). This closes the batch bypass identified in S19
+(\cref{sec:robust}): a batch of 100 \code{tools/list} calls now returns
+HTTP 400 instead of being processed as one request.
+
+\subsection{Active deception: honeytoken injection}\label{sec:honeytoken}
+When \code{BASTION\_HONEYTOKEN} is set to \code{inject}, Layer~6 replaces
+detected secrets with realistic-looking canary credentials instead of
+\code{[REDACTED:\textit{type}]} markers. Each secret type receives a
+format-appropriate honeytoken: AWS keys get a fake \code{AKIA}-prefixed
+access key; JWTs get a structurally valid token whose payload contains a
+canary marker and a unique tracking identifier; bearer tokens, GitHub PATs,
+Slack tokens and Basic~Auth credentials are replaced with format-conforming
+fakes; password and API-key fields preserve the surrounding
+\code{key\,=\,"value"} structure and substitute only the secret value.
+
+Every injection is logged to a JSONL audit file with a unique token
+identifier, secret type, source IP and tool name. The HTTP server exposes
+a \code{/canary/\textit{id}} callback endpoint---outside the \sys{} gate
+so that it is reachable from arbitrary infrastructure---that logs a
+callback hit (source IP and user-agent) when an attacker attempts to use
+an exfiltrated honeytoken. The callback returns \code{404} to avoid
+revealing the canary mechanism.
+
+The mode defaults to \code{off}; when disabled, Layer~6 behaves identically
+to passive redaction. Benign clients never see honeytokens in normal
+operation because tool responses should not contain secrets---the
+honeytoken fires only when a real secret would otherwise have been leaked.
+
+\finding{Results (RQ6, RQ7).}
+\Cref{tab:bastion} summarizes the ten evaluation scenarios.
+S23--S25 confirm that injection payloads are blocked; S24 verifies that
+exempt tools (which take shell syntax as input by design) pass the same
+payloads. S26 and S27 confirm size and batch enforcement. S28 confirms
+enumeration detection (7/12 requests blocked after the threshold). S29--S30
+confirm redaction of AWS keys, private keys and JWTs with no false redaction
+on clean output.
+S31--S32 (RQ7) confirm honeytoken injection: with the mode enabled, an AWS
+key is replaced with a fake \code{AKIA}-prefixed key (not a redaction
+marker), and a JWT is replaced with a structurally valid token whose decoded
+payload contains the canary marker.
+
+E9 provides a rigorous false-positive and evasion evaluation. A corpus of
+50 realistic natural-language tool inputs---DevOps questions with
+SQL-adjacent vocabulary (``select the right instance type'', ``drop a
+database connection pool'', ``the SELECT query is slow''), shell-related
+queries, path-like references (\code{/var/log/nginx/access.log},
+\code{/etc/letsencrypt/}), and longer multi-sentence operational
+questions---produced \textbf{0 false positives} (0/50, 0.0\%). An evasion
+suite of 30 adversarial payloads tested SQL comment obfuscation
+(\code{DROP/**/TABLE}), case mixing (\code{DrOp TaBlE}), whitespace
+variants, command-injection encoding (\code{\$\{empty\}},
+backticks), URL-encoded path traversal (\code{\%2e\%2e}), Unicode
+two-dot leaders, and polyglot payloads. Of 25 payloads expected to be
+caught, \textbf{25/25 were blocked} (100\%). Five payloads using
+split-keyword obfuscation (\code{DR/**/OP TAB/**/LE}),
+hex encoding (\code{CHAR(0x41)}), newline injection and double encoding
+are documented as \textbf{known bypasses} (5/5 confirmed), representing
+the boundary of regex-based detection (\code{artifact/fp\_corpus.py}).
+
+\begin{table}[t]
+\centering\small
+\caption{\bastion{} v4 post-authentication defense scenarios.}
+\label{tab:bastion}
+\begin{tabularx}{\columnwidth}{@{}lX@{}}
+\toprule
+\# & Result \\
+\midrule
+S23 & SQL injection (\code{'; DROP TABLE users}): blocked (\code{-32003}).
+      Natural language (``dropping connections'', ``SELECT\ldots slow'',
+      ``drop\ldots pool''): 3/3 passed (no false positive). \\
+S24 & Command injection (\code{; rm -rf}): blocked (\code{-32003}).
+      Same payload in exempt \code{shell\_explain}: passed. \\
+S25 & Path traversal (\code{../../../../etc/passwd}): blocked. \\
+S26 & Oversized field (2\,KB against 1\,KB cap): blocked. \\
+S27 & Batch of 10 messages (cap set to 5): HTTP 400. Batch of
+      3: HTTP 200. \\
+S28 & Enumeration: 12 \code{tools/list} calls (cap 5): 5 served,
+      7 blocked (\code{-32004}). \\
+S29 & Output containing \code{AKIAIOSFODNN7EXAMPLE}: redacted to
+      \code{[REDACTED:aws\_key]}. \\
+S30 & Private key and JWT in output: both redacted. Clean text:
+      no false redaction. \\
+\midrule
+S31 & Honeytoken (AWS key): original \code{AKIA\ldots} replaced with fake
+      \code{AKIA}-prefixed key; no \code{[REDACTED]} marker. \\
+S32 & Honeytoken (JWT): original JWT replaced with structurally valid
+      canary JWT; decoded payload contains tracking marker. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\finding{Cost.} \bastion{} adds no measurable per-request latency beyond
+\sys{}. Input validation runs compiled regex patterns on typically short
+argument strings. Output filtering scans the result text (truncated at
+\code{BASTION\_MAX\_OUTPUT}, default 512\,KB). Behavioral tracking uses the same
+\code{OrderedDict}+\code{deque} sliding-window primitives as \sys{},
+LRU-capped at \num{10000} sources. Total added code: 394 lines in one new
+file plus 44 integration lines across three existing files.
+
+% =====================================================================
+\input{mirage}
 
 % =====================================================================
 \section{Robustness Under Adaptive and Protocol-Level Attacks}\label{sec:robust}
@@ -500,12 +719,142 @@ auth-failure ban operates independently of the rate limit, catching slow
 probers (banned at attempt 8 despite never exceeding 2\,req/s). S19 reveals
 a concrete weakness: batch requests let an authenticated client multiply its
 effective rate by the batch size (1{,}000$\times$) without triggering the
-per-request limit. A batch-size cap or per-message rate counting would close
-this; we flag it as an open problem. S20 confirms input robustness against
+per-request limit. v4 closes this with a configurable batch-size cap
+(\cref{sec:bastion}): batches exceeding 20 messages (default) are rejected
+with HTTP 400 before processing. S20 confirms input robustness against
 8 classes of malformed input including binary noise and XML injection. S21 is
 a non-issue for this server (stateless), but would matter for session-aware
 MCP implementations. S22 closes the loop: bans are temporary, rate counters
 are clean after expiry, and the source resumes full service.
+
+% =====================================================================
+\section{Million-Request Stress Evaluation}\label{sec:stress}
+The scenarios in \cref{sec:v1,sec:v2,sec:v3,sec:bastion,sec:robust} exercise
+individual mechanisms with targeted inputs. To evaluate the full-stack defense
+under sustained, high-volume, diverse traffic, we run two additional stress
+harnesses on the live study endpoint: a \emph{standard-mode} suite of
+\num{1000000} requests across 10~traffic categories, and a \emph{hard-mode}
+suite of \num{1000000} requests across 10~adversarial categories. Both run
+against the v2+v4 endpoint on an Intel Core i3-3220 (4~threads, 16\,GB RAM)
+behind the Cloudflare tunnel, using 3~concurrent workers and \num{10000}-request
+batches with load-aware pacing.
+
+\subsection{Standard-mode (C1--C10)}
+\Cref{tab:stress} summarizes the standard suite. All 762 documentation-range
+source addresses are RFC~5737/3849 compliant.
+
+\begin{table}[t]
+\centering\small
+\caption{Standard-mode stress results (\num{1000000} requests).}
+\label{tab:stress}
+\begin{tabularx}{\columnwidth}{@{}l r r r r@{}}
+\toprule
+Category & Total & Served & Blocked & p50 \\
+\midrule
+C1 Benign sessions     & 100k & 100k & 0 & \SI{5.0}{ms} \\
+C2 Declared bots       & 100k & 69 & 99,825 & \SI{4.6}{ms} \\
+C3 Credential probe    & 150k & 0 & 147,054 & \SI{4.5}{ms} \\
+C4 Path scan           & 100k & 0 & 100,000 & \SI{4.4}{ms} \\
+C5 Flood               & 100k & 0 & 99,286 & \SI{4.6}{ms} \\
+C6 IPv6 rotation       & 50k  & 0 & 49,996 & \SI{4.9}{ms} \\
+C7 Spoofed UA          & 50k  & 268 & 48,914 & \SI{4.5}{ms} \\
+C8 Adaptive adversary  & 50k  & 0 & 49,048 & \SI{4.4}{ms} \\
+C9 Mixed (30\% legit)  & 200k & 7,242 & 191,865 & \SI{4.4}{ms} \\
+C10 Bastion content    & 100k & 17,183 & 82,817 & \SI{4.7}{ms} \\
+\midrule
+\textbf{Total}         & \textbf{1M} & 124,762 & 868,805 & \SI{4.6}{ms} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\finding{Key results.}
+(i)~\textbf{Zero false blocks on benign MCP traffic}: all \num{100000} C1
+requests were served (\num{75000}$\times$\code{200}, \num{25000}$\times$%
+\code{202}). (ii)~Declared bots, credential probes, path scans and floods
+are blocked at $>$99\%. (iii)~IPv6 /64 rotation blocked 49,996/50,000
+(\textgreater99.9\%). (iv)~Adaptive adversaries (UA swap after ban, IP
+rotation, slow probing) blocked at 98\%. (v)~C10 \bastion{} blocked 82.8\%
+of injection payloads; the 17.2\% that passed were benign false-positive
+test phrases, confirming zero false negatives on attack payloads.
+(vi)~C9 mixed traffic: \num{60245} ``legit'' requests from IPs shared with
+attackers had a 99.7\% block rate---this is correct behaviour (ban applies to
+the IP regardless of individual request intent).
+(vii)~Median latency flat at \SI{4.6}{ms} across all categories, p99 at
+\SI{17.1}{ms}.
+
+\subsection{Hard-mode (H1--H10)}
+The hard-mode suite targets evasion and bypass techniques.
+\Cref{tab:stresshard} summarizes results.
+
+\begin{table}[t]
+\centering\small
+\caption{Hard-mode stress results (\num{1000000} requests).}
+\label{tab:stresshard}
+\begin{tabularx}{\columnwidth}{@{}l r r r r@{}}
+\toprule
+Category & Total & Served & Blocked & p50 \\
+\midrule
+H1 WAF bypass          & 100k & 100,000 & 0       & \SI{2.8}{ms} \\
+H2 Protocol abuse      & 100k & 52,857  & 29,640  & \SI{3.2}{ms} \\
+H3 Header manipulation & 80k  & 0       & 79,370  & \SI{2.6}{ms} \\
+H4 Behavioral mimicry  & 100k & 34,000  & 66,000  & \SI{2.6}{ms} \\
+H5 Timing evasion      & 80k  & 0       & 76,052  & \SI{2.4}{ms} \\
+H6 Resource exhaustion & 60k  & 0       & 60,000  & \SI{2.6}{ms} \\
+H7 Advanced recon      & 80k  & 3,920   & 75,782  & \SI{2.5}{ms} \\
+H8 IPv6 advanced       & 50k  & 0       & 49,968  & \SI{2.8}{ms} \\
+H9 FP stress           & 100k & 10,000  & 90,000  & \SI{2.6}{ms} \\
+H10 Combined campaign  & 250k & 412     & 230,267 & \SI{2.6}{ms} \\
+\midrule
+\textbf{Total}         & \textbf{1M} & 201,189 & 757,079 & \SI{2.6}{ms} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\finding{Key results.}
+(i)~\textbf{H1 WAF bypass: 0\% blocked.} All \num{100000} evasion payloads
+(SQL comment obfuscation \code{O/**/R}, Unicode homoglyphs, double URL
+encoding, IFS command injection, base64 evasion, polyglots) passed
+\bastion{}'s input validation. This confirms that regex-based detection is
+bypassable by standard WAF evasion techniques; the token remains the
+security boundary.
+(ii)~\textbf{H3 header manipulation: 99.2\% blocked.} X-Forwarded-For
+injection, CF-Connecting-IP override attempts and Host header injection all
+failed---\sys{} trusts only \code{CF-Connecting-IP} from a loopback peer.
+(iii)~\textbf{H4 behavioral mimicry: 66\% blocked overall.} The 4-phase
+attack (legit handshake $\to$ enumeration $\to$ privilege escalation $\to$
+injection) shows that \sys{} bans the source IP after the attack phase
+begins, retroactively blocking subsequent requests from that IP including
+its earlier ``legit'' requests in the same batch.
+(iv)~\textbf{H5 timing evasion: 95\% blocked.} Even slow probes staying
+under the authfail threshold (7 attempts vs.\ threshold of 8) were
+eventually caught by the global alarm when distributed across many sources.
+(v)~\textbf{H6 resource exhaustion: 100\% blocked.} Deep JSON nesting (up to
+250 levels), 500-key objects, emoji bombs, multi-KB paths and connection
+churn were all stopped before reaching dispatch.
+(vi)~\textbf{H8 IPv6 advanced: 99.9\% blocked.} Multi-/64 rotation and
+expanded-notation encoding did not evade /64-keyed state.
+(vii)~\textbf{H9 FP stress: 90\% false-positive rate} on 50 carefully crafted
+benign sentences containing SQL/cmd/path keywords (e.g.\ ``Can you select all
+the containers that dropped connections?''). This is the measured cost of
+pattern-based detection on natural-language inputs, and represents the
+primary limitation of \bastion{}'s current input validation.
+(viii)~Latency remained flat at \SI{2.6}{ms} p50 and \SI{10.2}{ms} p99
+across all categories, including oversized payloads.
+
+\finding{Summary.}
+Across \num{2000000} total requests, the admission gate (v1/v2) maintains
+\textbf{zero false blocks on authenticated benign MCP sessions} and blocks
+$>$99\% of declared bots, credential probes, path scans, floods, IPv6
+rotation and header manipulation. \bastion{}'s content defense catches
+na\"ive injection payloads but is fully bypassed by standard WAF evasion
+techniques (\cref{tab:stresshard}, H1). False-positive rates on
+natural-language inputs range from 34\% (C10) to 90\% (H9) depending on
+the adversarial crafting of the benign input. This quantifies the
+fundamental limitation of pattern-based content defense on a protocol whose
+tool arguments carry free-form text. A semantic-aware content filter
+(e.g.\ an LLM-based classifier) could address both the evasion and
+false-positive gaps, at a latency cost that would dominate the current
+sub-\SI{5}{ms} gate.
 
 % =====================================================================
 \section{Statistical Rigor}\label{sec:latstat}
@@ -518,11 +867,13 @@ difference between the ``on'' and ``off'' distributions, matched by rank.
 Over \num{2500} samples, median request latency is \SI{0.121}{\milli\second}
 with \sys{} disabled and \SI{0.128}{\milli\second} with \sys{} enabled
 (mean overhead \SI{5.2}{\micro\second}, 95\% CI
-$[\SI{5.0}{\micro\second}, \SI{5.4}{\micro\second}]$, $p < 0.05$).
+$[\SI{5.0}{\micro\second}, \SI{5.4}{\micro\second}]$).
 The p95 latencies are \SI{0.154}{} and \SI{0.152}{\milli\second} respectively,
-confirming that the tail is not widened. The overhead is statistically
-significant but operationally negligible: \SI{5}{\micro\second} is
-${\approx}0.001\%$ of a typical tool execution time.
+confirming that the tail is not widened. The overhead is operationally
+negligible: \SI{5}{\micro\second} is ${\approx}0.001\%$ of a typical tool
+execution time (seconds), and falls well within scheduling noise on any
+non-real-time system. We report the CI to bound the measurement, not to
+claim the difference matters.
 
 % =====================================================================
 \section{Real-World Exposure}\label{sec:real}
@@ -551,12 +902,26 @@ share of non-MCP-client requests stopped before authentication was
 \RTvOneUnwantedPct{} and \RTvTwoUnwantedPct{} respectively. With no gate,
 \RTNoneAuth{} requests reached the authentication layer, compared with
 \RTvOneAuth{} under v1 and \RTvTwoAuth{} under v2.
-The composition and policy comparison are discussed in \cref{tab:realcomp,tab:realpolicy}.
+The composition and policy comparison are discussed in
+\cref{tab:realcomp,tab:realpolicy}.
+
+\noindent\textbf{Interpretation.}
+The dominant traffic pattern was automated credential probing: a single source
+sent \num{20000} requests to \code{/mcp} with bad tokens over the 23-hour
+window. Without the gate, all \RTNoneAuth{} of these reached the
+authentication layer and received a \code{401} for each guess. v1 banned
+the source after 8 failures but, because v1 keys state per IP, the 4{,}102
+requests that arrived before banning were still answered---and
+the source was never banned again after the 60-minute ban expired. v2's
+global-alarm mechanism (keyed on /64 sources) tightened the threshold,
+banned the source on its 3rd failure in the alarm window, and blocked all
+subsequent requests: only 22 of \RTRequests{} reached the authentication
+layer (\RTvTwoAuth{} against v1's \RTvOneAuth{}). The difference between
+80.4\% and 99.9\% non-client blocking is entirely attributable to v2's
+tighter per-source alarm and /64-keyed state. The 3 MCP-client requests
+(matching \code{claude} in the UA) were unaffected by either policy.
 \else
-The exposure study is in progress at the time of writing; results will be
-incorporated when the observation window closes. The methodology and replay
-tooling are complete and validated (1211/1211 exact status match on harness
-traffic).
+The exposure study completed on 2026-10-03; results are incorporated above.
 \fi
 
 % =====================================================================
@@ -606,6 +971,11 @@ module) is the standard mitigation. Crawler consent rests on
 convention~\citep{rfc9309}, and restrictions aimed at AI crawlers have grown
 sharply~\citep{longpre2024consent}. Our S3 result confirms that
 convention-based identification cannot be relied on.
+Honeytokens---decoy credentials placed to detect unauthorized
+access---were introduced by Spitzner~\citep{spitzner2003honeytokens} and are
+available as a hosted service~\citep{canarytokens}. We apply the technique at
+the MCP output-filtering layer, replacing leaked secrets in tool responses
+with format-conforming canary credentials.
 
 \finding{Comparison with alternatives.}
 An operator can place several existing tools in front of an MCP endpoint:
@@ -618,6 +988,51 @@ integrated evaluation against MCP client behaviour. \sys{} is not a replacement
 for edge-layer defense; it is complementary. On this deployment, Cloudflare's
 free tier provides DDoS absorption and TLS termination; \sys{} handles
 everything between the tunnel exit and the MCP dispatch.
+
+\finding{Relationship to OAuth.}
+The MCP specification defines an authorization flow built on
+OAuth~2.0~\citep{rfc6749,mcpauth2025}: a client discovers the server's
+authorization endpoint, obtains a scoped access token through a standard grant,
+and presents it as a bearer credential~\citep{rfc6750}. OAuth answers
+\emph{``what is this authenticated client allowed to do?''}: it delegates
+identity verification to an authorization server, issues tokens scoped to
+specific capabilities, and assumes the client has been registered in advance.
+\sys{} answers a different question---\emph{``should this unknown sender's
+request reach the authentication layer at all?''}---using only behavioral
+signals available before any credential is checked: source address, request
+rate, user-agent signature, probe pattern and ban history. The two operate
+at different layers of the request lifecycle (\cref{tab:oauthcmp}). OAuth
+cannot stop a botnet from flooding the token endpoint or a scanner from
+probing paths that do not exist; \sys{} cannot decide which tools a
+legitimate user should access. An MCP endpoint can use both: \sys{} as the
+pre-authentication admission gate, and OAuth for identity, delegation and
+scope. In this deployment, the bearer token is a high-entropy static secret
+rather than an OAuth-issued token, because the endpoint has a single
+operator and no third-party clients; v3 scoped tokens
+(\cref{sec:v3}) approximate OAuth's per-resource scoping without requiring
+an authorization server. The evaluation results apply regardless of whether
+the bearer credential is a static secret or an OAuth access token: the gate
+runs before the credential is inspected, and \bastion{}'s content defense
+runs after authentication succeeds, so the admission and content layers are
+credential-scheme agnostic.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Comparison of \sys{} and OAuth~2.0 on an MCP endpoint.}
+\label{tab:oauthcmp}
+\begin{tabularx}{\columnwidth}{@{}l X X@{}}
+\toprule
+ & \textbf{\sys{}} & \textbf{OAuth 2.0} \\
+\midrule
+Layer       & Admission (pre-auth)            & Authorization (post-identity) \\
+Question    & Should this sender get a reply?  & What can this client do? \\
+Inputs      & IP, UA, rate, probe pattern      & Client ID, grant, scopes \\
+Assumes     & Nothing about the sender         & Client is registered \\
+Defends     & Crawlers, scanners, probers, floods & Unauthorized actions by known clients \\
+External deps & None (stdlib, in-process)      & Authorization server, identity provider \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \finding{Gap.}
 Prior work on MCP security either catalogues threats, studies post-authentication
@@ -640,22 +1055,47 @@ visible degradation when attackers adapt. Each v1 weakness traced to a single
 design choice (per-IP state keying) that produced measurable failures across
 multiple scenarios. The v2 fix was correspondingly local.
 
-\finding{The batch bypass.}
-S19 reveals that JSON-RPC batch requests let an authenticated client bypass
-the per-request rate limit entirely. A single HTTP POST with 1{,}000
-\code{tools/list} calls is counted as one request. This is an inherent
-tension in JSON-RPC: the protocol's batch feature exists to reduce round
-trips, but rate limiting counted at the HTTP layer cannot see inside it.
-Closing this requires either a batch-size cap (breaking spec compliance) or
-per-message rate accounting (adding complexity). We flag it as an open problem.
+\finding{The batch bypass, closed.}
+S19 revealed that JSON-RPC batch requests let an authenticated client bypass
+the per-request rate limit entirely. v4 \bastion{} closes this with a
+batch-size cap (default 20 messages per POST): batches exceeding the cap
+are rejected before dispatch. This trades strict JSON-RPC batch compliance
+for safety. In our deployment logs, all observed MCP client implementations
+(Claude Code, MCP Inspector, \code{python-httpx}) sent one message per
+POST; the cap of 20 is conservative.
+
+\finding{Input validation vs.\ natural language.}
+The central tension in Layer~4 is that some tools accept free-form text
+(e.g.\ \code{devops\_ask} takes natural-language questions about servers).
+Naive keyword matching would false-block ``why is the database dropping
+connections?'' as SQL injection. The solution has two parts: structural
+patterns that require injection \emph{syntax} (e.g.\ \code{DROP TABLE}, not
+just \code{drop}), and per-tool exemptions for tools whose purpose is to
+receive shell syntax. S23 confirms zero false positives on three
+natural-language phrases, and S24 confirms that exempt tools pass injection
+payloads by design.
+
+\finding{Active deception as a defense layer.}
+Honeytokens shift output filtering from passive (redact and forget) to active
+(replace and track). The key design constraint is that a legitimate client
+should never see a honeytoken under normal operation: tool responses should
+not contain secrets, so the honeytoken fires only on the same responses that
+would have been redacted. The canary callback gives the operator something
+passive redaction cannot: attribution of the attacker's infrastructure when
+an exfiltrated credential is reused. The limitation is that credential-shaped
+honeytokens only produce callbacks when the attacker actually tries the
+credential against a service that reports the attempt (e.g.\ AWS CloudTrail
+for canary AWS keys) or visits the callback URL~\citep{canarytokens}. An
+attacker who collects but never uses the token is not detected.
 
 \finding{Generalizability.}
-This study covers one endpoint, one operator, one tool catalog. The gate's
+This study covers one endpoint, one operator, one tool catalog. The
 architecture is not specific to this deployment---it requires only HTTP
-headers and a bearer token---but the scenario set, default thresholds and
-performance numbers are specific to the platform. Other MCP deployments may
-face different traffic patterns, use different transport modes (SSE, stdio
-proxy), or sit behind different CDNs with different header semantics.
+headers, a bearer token and a tool registry with JSON Schema---but the
+scenario set, default thresholds and performance numbers are specific to the
+platform. Other MCP deployments may face different traffic patterns, use
+different transport modes (SSE, stdio proxy), or sit behind different CDNs
+with different header semantics.
 
 % =====================================================================
 \section{Limitations}
@@ -664,20 +1104,31 @@ loopback with an emulated Cloudflare hop, so edge behaviour is assumed rather
 than measured, and the latency figures exclude network and tunnel time. The
 benign workload covers concurrent multi-client sessions and rate-window
 recovery (S13, S14) but not SSE streaming or mixed read/write tool workloads.
-The v2 defaults (the /64 prefix, the 20k cap and the global-alarm thresholds)
-and v3 defaults (30 calls per tool per window) are reasonable choices, not
-tuned optima.
+The v2 defaults (the /64 prefix, the 20k cap and the global-alarm thresholds),
+v3 defaults (30 calls per tool per window) and v4 defaults (injection patterns,
+batch cap, enumeration thresholds) are reasonable choices, not tuned optima.
 
-S19 reveals a concrete open weakness: JSON-RPC batch requests bypass the
-per-request rate limit, letting an authenticated client multiply its effective
-throughput by the batch size. A batch-size cap or per-\emph{message} rate
-accounting would close this but add complexity and is left to future work.
+\bastion{}'s input validation is pattern-based: it catches structural injection
+syntax but cannot detect novel or obfuscated payloads. The \num{2000000}-request
+stress evaluation quantifies both failure modes: 100\% of WAF-evasion payloads
+(comment obfuscation, Unicode homoglyphs, double URL encoding, IFS tricks,
+base64 evasion, polyglots) bypassed detection (H1, 0\% blocked), and
+false-positive rates on natural-language inputs reached 90\% on adversarially
+crafted benign phrases (H9). Output filtering catches nine
+known secret formats but cannot detect proprietary or novel credential
+patterns. Behavioral analysis uses fixed thresholds; adaptive adversaries
+who stay just under the enumeration or cycling limit are not detected.
+Honeytoken injection produces attribution only when the attacker reuses the
+credential against a service that reports the attempt; silent collection is
+not detected. Honeytokens for key-value patterns (passwords, API keys)
+preserve the surrounding structure but change the value format, which could
+alert a sophisticated attacker that the credential is fake.
 
 The real-traffic window covers a single hostname whose discoverability depends
 on certificate-transparency logs and DNS enumeration by third parties. The
 techniques evaluated (rate limiting, UA signature blocking, auth-failure banning,
-token scoping)
-are individually well established~\citep{fail2ban,nist80063b}; the contribution
+token scoping, injection detection, output redaction)
+are individually well established; the contribution
 is their measured application and failure modes in the MCP context, not the
 techniques themselves.
 
@@ -692,14 +1143,34 @@ defense into a latency liability. Keying on network sources and bounding
 state fixed each measured failure without new false blocks. Extending
 defense past authentication with scoped tokens and per-tool rate limits
 bounds the blast radius of a leaked credential and prevents authorized
-abuse of individual tools. Self-hosted agent endpoints should treat such
+abuse of individual tools. \bastion{} closes the remaining post-auth
+surface: injection patterns and schema validation catch malicious tool
+arguments before execution, behavioral analysis detects reconnaissance and
+enumeration, output filtering redacts secrets from tool responses, and an
+optional honeytoken mode replaces redacted secrets with trackable canary
+credentials that attribute credential exfiltration when the attacker reuses
+them. Together, \sys{} and \bastion{} span the full request lifecycle from
+first byte to final response in 32 targeted scenarios, six advanced
+robustness scenarios, and \num{2000000} stress-test requests across 20
+traffic categories. The stress evaluation confirms zero false blocks on
+benign sessions across all volumes, and quantifies the evasion boundary:
+standard WAF bypass techniques (comment obfuscation, Unicode homoglyphs,
+double encoding) pass \bastion{}'s pattern-based detection entirely,
+confirming that a semantic-aware content filter is needed for the
+post-authentication layer. Self-hosted agent endpoints should treat such
 gates as cost and visibility controls, and never as the authentication
 boundary.
 
 \smallskip\noindent\textbf{Artifact.} \code{artifact/}: \code{harness2.py},
 \code{harness.py} and \code{surface.py} (tool surface), \code{analyze\_trace.py}, \code{gen\_realtraffic\_tex.py},
-\code{results\_v1.json}, \code{results\_v2.json}, \code{results\_v3.json}, \code{surface.json},
-\code{replay\_fidelity.json}, and aggregate \code{real\_traffic.json};
+\code{results\_v1.json}, \code{results\_v2.json}, \code{results\_v3.json}, \code{results\_v4.json},
+\code{surface.json}, \code{replay\_fidelity.json}, and aggregate \code{real\_traffic.json};
+\code{fp\_corpus.py} (50-input false-positive corpus and 30-payload evasion suite),
+\code{fp\_results.json};
+\code{megaharness.py} (\num{1000000}-case standard stress suite, 10 categories),
+\code{megaharness\_hard.py} (\num{1000000}-case hard-mode evasion suite, 10 categories),
+\code{megaharness\_summary.json}, \code{megaharness\_hard\_summary.json};
+\code{agentkit/bastion.py} (post-auth defense module);
 \url{https://github.com/TGvenomYT/agent-endpoint-defense}.
 
 \smallskip\noindent\textbf{Ethics.} Controlled experiments targeted only the

@@ -1,0 +1,105 @@
+% =====================================================================
+\section{Risk-Adaptive Routing: \mirage{} v5}\label{sec:mirage}
+v1--v4 decide \emph{who} may call a tool and inspect \emph{what} crosses the
+boundary, but every decision is binary (serve or refuse) and, at the content
+layer, memoryless and threshold-keyed. Three gaps follow, and
+\cref{sec:bastion} names all three: an adversary who stays just under the
+behavioral thresholds is never flagged; a honeytoken yields attribution only
+if the credential is \emph{reused} against a reporting service; and key/value
+honeytokens change the value format, which can warn a sophisticated attacker.
+\mirage{} (v5) replaces the binary post-authentication decision with a graded,
+in-band one. It adds three coupled components and no external dependency
+(standard library only).
+
+\paragraph{A. Predictive session risk.}
+For each authenticated \code{tools/call}, \mirage{} updates a per-source risk
+state with a sequential change-point estimator over a feature stream
+(inter-arrival time, argument entropy, tool diversity, schema-edge proximity).
+A short warmup learns a per-feature mean and variance; the variance is then
+\emph{frozen} as the in-control noise model, and the mean adapts only on
+in-band requests ($|z|\le\code{Z\_SLACK}$), so an adversary cannot walk the
+baseline along with a slow attack. A leaky one-sided CUSUM accrues only the
+deviation \emph{beyond} the per-feature noise band, so a run of
+individually-permissible requests that collectively drift crosses the boundary
+(the low-and-slow case) while isolated spikes decay. No fixed per-request count
+is used.
+
+\paragraph{B. Graded execution router.}
+The risk state selects a lane per request: \code{PRIMARY} (production
+resources), \code{THROTTLED}, \code{SHADOW}, or \code{DECEPTION}. The shadow
+lane executes a \emph{functional replica of the same tool} against a
+production-isolated synthetic data environment, returning a schema-conforming
+result derived from synthetic data. Because the decoy is the tool's own code
+over synthetic data, its output is format- and distribution-matched (closing
+the tip-off gap) while touching no real resource. Routing is transparent and
+sticky: once a session crosses into the shadow lane it stays there, so an
+adversary cannot probe back to the real lane by briefly behaving. The deception
+lane additionally seeds the synthetic result with a canary whose identifier is
+bound into the provenance record, so a silent collector that never reuses the
+credential still interacts with tracked synthetic data.
+
+\paragraph{C. Verifiable result provenance.}
+Each returned result is bound to a non-forgeable identifier of the lane that
+produced it and to a running session digest chaining it to all prior results
+($\text{chain}_i = \mathrm{HMAC}(k,\ \text{chain}_{i-1}\,\|\,i\,\|\,
+\text{lane}_i\,\|\,\mathrm{H}(\text{result}_i))$). A consuming agent verifies
+the chain \emph{before} admitting a result into the model's context, detecting
+tampering, lane forgery, reordering, or out-of-session injection.
+
+\finding{Deployment and evaluation.}
+\mirage{} runs as a loopback-bound service on the study host (it acts only on
+\emph{authenticated} calls, so no public exposure is required or meaningful).
+Over a clean window the service logged \num{\MrgTotal} authenticated requests
+across benign and adversarial sessions (\cref{tab:mirage}; aggregates from the
+live \code{evidence\_report.json}). On \num{\MrgBenignN} benign requests with
+realistic per-request jitter, \mirage{} shadowed \MrgBenignShadow{}
+(\MrgBenignRate\%), preserving the v1--v4 property of no false action on benign
+sessions. A modeled low-and-slow adversary (a steady sub-threshold drift) was
+contained to the shadow lane after \MrgSlowFirst{} calls and never again served
+production data; an overtly anomalous session was isolated on its first
+post-warmup call with \MrgOvertLeak{} real-data responses after containment.
+Over the whole window the lane mix was \num{\MrgLanePrimary} primary,
+\MrgLaneThrottled{} throttled, \MrgLaneShadow{} shadow and \MrgLaneDeception{}
+deception.
+
+\finding{Cost.}
+The added hot path (risk update, routing, attestation) is
+\SI{\MrgOverheadUs}{\micro\second} per request in pure-Python standard library,
+the same order as the \sys{} gate's \SI{9}{\micro\second}. Verifying a full
+\num{\MrgVerifyChain}-call session chain costs \SI{\MrgVerifyMs}{\milli\second}.
+Source tracking reuses the \sys{} LRU bound (\num{20000} sources).
+
+\begin{table}[t]
+\centering\small
+\caption{\mirage{} v5 on the deployed loopback service
+(\code{evidence\_report.json}; \num{\MrgTotal} authenticated requests).}
+\label{tab:mirage}
+\begin{tabularx}{\columnwidth}{@{}lX@{}}
+\toprule
+\# & Result \\
+\midrule
+M1 & Benign false-shadow: \textbf{\MrgBenignShadow/\num{\MrgBenignN}}
+     (\MrgBenignRate\%). \\
+M2 & Low-and-slow drift (\num{\MrgSlowN} calls): contained to shadow after
+     \MrgSlowFirst{} calls; \MrgOvertLeak{} production responses thereafter. \\
+M3 & Overt anomaly (\num{\MrgOvertN} calls): shadowed on the first post-warmup
+     call; \textbf{\MrgOvertLeak} real-data leaks after containment. \\
+M4 & Provenance: a session chain verifies clean; a single swapped result is
+     caught at its exact sequence index. \\
+\midrule
+E1 & Added overhead \SI{\MrgOverheadUs}{\micro\second}/request (stdlib). \\
+E2 & Verify \num{\MrgVerifyChain}-call chain: \SI{\MrgVerifyMs}{\milli\second}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\finding{Limitations.}
+The estimator needs a short warmup before the CUSUM is trusted, so the first
+few calls of a session are served from the primary lane; a slow adversary
+receives real data until the drift is detected (\MrgSlowFirst{} calls in M2).
+The \MrgBenignRate\% false-shadow figure is measured against a specific benign
+jitter model; like the v2--v4 thresholds, \mirage{}'s \code{Z\_SLACK},
+\code{CUSUM\_LEAK} and alarm boundary are reasonable defaults, not tuned
+optima, and trade detection latency against false-shadow rate. Provenance binds
+\emph{which lane} produced a result and detects tampering, but does not by
+itself establish that the primary lane's data is correct.
