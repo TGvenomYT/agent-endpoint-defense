@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "Guarding the Door: Measuring and Hardening Lightweight Full-Stack Defense for an Internet-Exposed MCP Agent Endpoint"
+abstract: "A deployed, dependency-free full-stack defense for a single-operator, Internet-exposed Model Context Protocol (MCP) agent endpoint: an admission gate (Guardian), post-authentication content defense (Bastion), and risk-adaptive in-band routing with verifiable result provenance (Mirage)."
+type: article
+authors:
+  - given-names: Niranjan
+    family-names: "R."
+    email: niranjan.r.dev@proton.me
+    affiliation: "KPR Institute of Engineering and Technology (KPRIET), Arasur, Coimbatore"
+version: "5.0.0"
+date-released: "2026-10-22"
+license: MIT
+url: "https://github.com/TGvenomYT/agent-endpoint-defense"
+repository-code: "https://github.com/TGvenomYT/agent-endpoint-defense"
+keywords:
+  - Model Context Protocol
+  - MCP security
+  - agent endpoint defense
+  - admission control
+  - deception
+  - LLM tool use

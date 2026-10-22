@@ -35,7 +35,7 @@ and a 2,000,000-request stress suite:
 | Path | What |
 |---|---|
 | `main.tex` | the paper |
-| `preamble.tex` | LaTeX preamble ([Markdown reference](preamble.md)) |
+| `preamble.tex` | LaTeX preamble ([Markdown reference](PREAMBLE.md)) |
 | `mirage.tex`, `mirage-data.tex` | the v5 section and its live-data macros |
 | `artifact/` | evaluation harness, stress tooling, replay tooling, generators |
 | `public-data/` | aggregate results (`results_v*.json`, `mirage_evidence_report.json`) |
