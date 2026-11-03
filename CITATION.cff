@@ -5,7 +5,6 @@ authors:
   - given-names: Niranjan
     family-names: "R."
     email: niranjan.r.dev@proton.me
-    affiliation: "KPR Institute of Engineering and Technology (KPRIET), Arasur, Coimbatore"
 version: "5.0.0"
 date-released: 2026-10-22
 license: MIT
@@ -24,6 +23,5 @@ preferred-citation:
   authors:
     - given-names: Niranjan
       family-names: "R."
-      affiliation: "KPR Institute of Engineering and Technology (KPRIET), Arasur, Coimbatore"
   year: 2026
   url: "https://github.com/TGvenomYT/agent-endpoint-defense"

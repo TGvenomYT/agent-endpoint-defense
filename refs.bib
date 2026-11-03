@@ -1,4 +1,4 @@
-% NOTE: verify every entry (authors, venue, year, URL) before submission.
+% Entries checked 2026-11-03 against arXiv, Crossref and the cited URLs.
 
 @misc{mcpspec,
   author       = {{Model Context Protocol}},
@@ -11,7 +11,10 @@
   author  = {Hou, Xinyi and Zhao, Yanjie and Wang, Shenao and Wang, Haoyu},
   title   = {Model Context Protocol ({MCP}): Landscape, Security Threats, and Future Research Directions},
   journal = {ACM Transactions on Software Engineering and Methodology},
-  year    = {2025},
+  volume  = {35},
+  number  = {10},
+  pages   = {1--37},
+  year    = {2026},
   doi     = {10.1145/3796519}
 }
 
@@ -138,50 +141,45 @@
 @techreport{nsamcp2026,
   author      = {{National Security Agency}},
   title       = {Model Context Protocol ({MCP}): Security Design Considerations for {AI}-Driven Automation},
-  institution = {NSA Artificial Intelligence Security Center},
+  type        = {Cybersecurity Information Sheet},
+  institution = {National Security Agency},
+  month       = may,
   number      = {U/OO/6030316-26},
   year        = {2026},
   howpublished = {\url{https://media.defense.gov/2026/Jun/02/2003943289/-1/-1/0/CSI_MCP_SECURITY.PDF}}
 }
 
 @inproceedings{cascade2026,
-  author    = {Li, Wei and Chen, Yuxiang and Zhang, Hao and others},
+  author    = {Turgut, {\.I}pek Abas{\i}kele{\c{s}} and G{\"u}m{\"u}{\c{s}}, Edip},
   title     = {{CASCADE}: A Cascaded Hybrid Defense Architecture for Prompt Injection Detection in {MCP}-Based Systems},
   booktitle = {The 12th International Conference on Computing and Artificial Intelligence (ICCAI)},
-  year      = {2026}
+  year      = {2026},
+  note      = {arXiv:2604.17125 (v1)}
 }
 
 @article{mcptox2025,
-  author  = {Zhang, Haoran and others},
+  author  = {Wang, Zhiqiang and Gao, Yichao and Wang, Yanting and Liu, Suyuan and Sun, Haifeng and Cheng, Haoran and Shi, Guanquan and Du, Haohua and Li, Xiangyang},
   title   = {{MCPTox}: A Benchmark for Tool Poisoning Attack on Real-World {MCP} Servers},
   journal = {arXiv preprint arXiv:2508.14925},
   year    = {2025}
 }
 
 @article{mcpitp2026,
-  author  = {Wang, Jiaqi and others},
+  author  = {Li, Ruiqi and Wang, Zhiqiang and Yao, Yunhao and Li, Xiang-Yang},
   title   = {{MCP-ITP}: An Automated Framework for Implicit Tool Poisoning in {MCP}},
   journal = {arXiv preprint arXiv:2601.07395},
   year    = {2026}
 }
 
 @article{trustshift2026,
-  author  = {Liu, Zheng and others},
+  author  = {Rostamzadeh, Mehrdad and Narula, Sidhant and Ghasemigol, Mohammad and Takabi, Daniel},
   title   = {{TrustShiftProbe}: Characterizing, Benchmarking, and Defending Staged Trust Attacks on {MCP} Servers},
   journal = {arXiv preprint arXiv:2608.23763},
   year    = {2026}
 }
 
-@incollection{tamayo2026slr,
-  author    = {Tamayo, Jayson E.},
-  title     = {Security Defense Mechanisms in Model Context Protocol Implementations: A Systematic Literature Review},
-  booktitle = {Lecture Notes in Computer Science},
-  publisher = {Springer},
-  year      = {2026}
-}
-
 @article{mcpthreatmodel2026,
-  author  = {Javed, Umer and others},
+  author  = {Huang, Charoes and Huang, Xin and Tran, Ngoc Phu and Fard, Amin Milani},
   title   = {Model Context Protocol Threat Modeling and Analyzing Vulnerabilities to Prompt Injection with Tool Poisoning},
   journal = {arXiv preprint arXiv:2603.22489},
   year    = {2026}
@@ -202,8 +200,59 @@
 }
 
 @article{mcpsafetyaudit2025,
-  author  = {Bajpai, Raunak and Fereidooni, Hossein and others},
+  author  = {Radosevich, Brandon and Halloran, John},
   title   = {{MCP} Safety Audit: {LLMs} with the Model Context Protocol Allow Major Security Exploits},
   journal = {arXiv preprint arXiv:2504.03767},
+  year    = {2025}
+}
+
+@misc{canarytokens,
+  author       = {{Thinkst Applied Research}},
+  title        = {Canarytokens: A Free, Quick, Painless Way to Help Defenders Discover They've Been Breached},
+  howpublished = {\url{https://canarytokens.org}},
+  year         = {2024}
+}
+
+@misc{spitzner2003honeytokens,
+  author    = {Spitzner, Lance},
+  title     = {Honeytokens: The Other Honeypot},
+  note      = {SecurityFocus},
+  year      = {2003},
+  howpublished = {\url{https://community.broadcom.com/symantecenterprise/communities/community-home/librarydocuments/viewdocument?DocumentKey=5c9c1f09-4115-4c02-8bf7-e6290cfb8a47}}
+}
+
+@misc{rfc6749,
+  author       = {Hardt, D.},
+  title        = {The {OAuth} 2.0 Authorization Framework},
+  howpublished = {RFC 6749, IETF},
+  year         = {2012}
+}
+
+@misc{mcpauth2025,
+  author       = {{Model Context Protocol}},
+  title        = {{MCP} Authorization Specification (2025-06-18)},
+  year         = {2025},
+  howpublished = {\url{https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization}}
+}
+
+@article{zhou2026mcpauth,
+  author  = {Zhou, Huijun and Zhang, Xiaohan and Zhang, Haozhe and Zhang, Haoyang and Zhang, Mi and Yang, Min},
+  title   = {A First Measurement Study on Authentication Security in Real-World Remote {MCP} Servers},
+  journal = {arXiv preprint arXiv:2605.22333},
+  year    = {2026}
+}
+
+@article{sohail2026remote,
+  author  = {Sohail, Muhammad Abdullah},
+  title   = {Characterizing Network Centralization and Observability in the Remote {MCP} Ecosystem},
+  journal = {arXiv preprint arXiv:2609.19100},
+  note    = {Accepted at the 1st IEEE ICNP Workshop on Network Infrastructure and Protocols for AI Agents (NIPA 2026)},
+  year    = {2026}
+}
+
+@article{hoetzlein2025logrip,
+  author  = {Hoetzlein, Rama Carl},
+  title   = {Protecting Small Organizations from {AI} Bots with {Logrip}: Hierarchical {IP} Hashing},
+  journal = {arXiv preprint arXiv:2508.03130},
   year    = {2025}
 }

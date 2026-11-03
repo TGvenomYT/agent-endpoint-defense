@@ -2,9 +2,7 @@
 
 **Measuring and Hardening Lightweight Full-Stack Defense for an Internet-Exposed MCP Agent Endpoint**
 
-Niranjan R. · Department of Artificial Intelligence and Data Science,
-KPR Institute of Engineering and Technology (KPRIET), Arasur, Coimbatore ·
-`niranjan.r.dev@proton.me`
+Niranjan R. · `niranjan.r.dev@proton.me`
 
 ---
 
@@ -66,8 +64,7 @@ More of the author's work: https://github.com/TGvenomYT
   title        = {Guarding the Door: Measuring and Hardening Lightweight
                   Full-Stack Defense for an Internet-Exposed MCP Agent Endpoint},
   year         = {2026},
-  howpublished = {\url{https://github.com/TGvenomYT/agent-endpoint-defense}},
-  note         = {KPR Institute of Engineering and Technology (KPRIET)}
+  howpublished = {\url{https://github.com/TGvenomYT/agent-endpoint-defense}}
 }
 ```
 

@@ -23,6 +23,10 @@ All figures are measured, not estimated. Sources: `artifact/` harnesses,
 - **Zero false blocks** on benign sessions.
 - Bastion content defense: 0/50 false positives on natural-language inputs;
   25/25 expected evasion payloads blocked (5 documented regex bypasses).
+- Bastion's input check on the exact stress payloads
+  (`artifact/stress_bastion_direct.py`): blocks **87.0%** of 100,000 WAF-evasion
+  and **80.0%** of 70,000 plain injection payloads; false-blocks **6.7%** of
+  100,000 adversarially worded and **0%** of 30,000 ordinary benign requests.
 
 ## Mirage (v5), deployed loopback service
 

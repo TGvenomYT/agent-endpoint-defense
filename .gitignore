@@ -8,5 +8,9 @@ state/
 *.fdb_latexmk
 *.fls
 realtraffic.tex.bak
-realtraffic.tex
 __pycache__/
+
+# regenerable (megaharness*.py generate) and too large for git
+artifact/*_plan.jsonl
+# build product of make-arxiv.sh
+arxiv-submission.tar.gz

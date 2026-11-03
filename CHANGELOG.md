@@ -4,6 +4,24 @@ Version history of the defense described in the paper. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions track the paper's
 Guardian/Bastion/Mirage progression.
 
+## Paper corrections — 2026-11-03
+### Fixed
+- **Stress-suite attribution (C10, H1, H9).** These categories sent every
+  payload to `shell_explain`, which Bastion exempts from injection checks, and
+  the harness records only HTTP status (a Bastion block is a JSON-RPC error
+  inside HTTP 200). Their HTTP outcomes were Guardian bans carried over from
+  earlier categories, not content-defense results. The earlier claims ("0% of
+  WAF-evasion payloads blocked", "90% false positives", "zero false negatives
+  in C10") are withdrawn. Measured directly on the same payloads
+  (`artifact/stress_bastion_direct.py`), Bastion blocks 87.0% of WAF-evasion
+  and 80.0% of plain injection payloads, with 6.7% false positives on
+  adversarially worded and 0% on ordinary benign inputs.
+- Standard-mode table: C2 served 69 → 46 (401s had been counted as served);
+  total served 124,762 → 124,739.
+- Bibliography: corrected authors for MCPTox, MCP-ITP, TrustShiftProbe, the
+  MCP threat-modeling paper, MCP Safety Audit and CASCADE; corrected venue for
+  the Tamayo review (LNNS) and year/volume for Hou et al. (TOSEM 35(10), 2026).
+
 ## [5.0.0] — 2026-10-22 — Mirage (v5)
 ### Added
 - **Risk-adaptive, in-band routing.** A sequential CUSUM session-risk estimator
