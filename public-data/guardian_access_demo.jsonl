@@ -1,0 +1,53 @@
+{"ts": 1790424213.462, "ip": "198.51.100.10", "ua": "operator-selftest/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 128}
+{"ts": 1790424279.465, "ip": "198.51.100.10", "ua": "operator-selftest/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 128}
+{"ts": 1790424405.472, "ip": "198.51.100.10", "ua": "operator-selftest/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 128}
+{"ts": 1790425273.325, "ip": "192.0.2.50", "ua": "GPTBot/1.0 (+https://openai.com/gptbot)", "method": "POST", "path": "/mcp", "status": 403, "note": "bot_ua:gptbot", "auth": "none", "clen": 46}
+{"ts": 1790425746.831, "ip": "192.0.2.51", "ua": "ClaudeBot/1.0", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:claudebot", "auth": "none", "clen": 0}
+{"ts": 1790426452.851, "ip": "198.51.100.30", "ua": "CCBot/2.0 (https://commoncrawl.org/faq/)", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:ccbot", "auth": "none", "clen": 0}
+{"ts": 1790429865.948, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429881.496, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429887.24, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429897.706, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429915.34, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429921.004, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429934.98, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790429946.479, "ip": "203.0.113.10", "ua": "curl/8.5.0", "method": "POST", "path": "/mcp", "status": 403, "note": "authfail_ban", "auth": "bad", "clen": 46}
+{"ts": 1790435510.15, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/admin", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435513.507, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/.env", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435517.745, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/wp-login.php", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435518.771, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/config.json", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435522.994, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/.git/config", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435526.787, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/api/v1/users", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435529.148, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/debug", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435530.77, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/actuator/health", "status": 404, "note": "pathscan", "auth": "none", "clen": 0}
+{"ts": 1790435535.642, "ip": "203.0.113.20", "ua": "python-requests/2.31.0", "method": "GET", "path": "/backup.sql", "status": 403, "note": "pathscan_ban", "auth": "none", "clen": 0}
+{"ts": 1790459594.343, "ip": "192.0.2.80", "ua": "Bytespider", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:bytespider", "auth": "none", "clen": 0}
+{"ts": 1790460249.991, "ip": "192.0.2.90", "ua": "PetalBot/2.5", "method": "GET", "path": "/robots.txt", "status": 403, "note": "bot_ua:petalbot", "auth": "none", "clen": 0}
+{"ts": 1790460579.006, "ip": "198.51.100.31", "ua": "AhrefsBot/7.0", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:ahrefsbot", "auth": "none", "clen": 0}
+{"ts": 1790463904.496, "ip": "198.51.100.45", "ua": "mcp-client/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 256}
+{"ts": 1790463911.325, "ip": "198.51.100.45", "ua": "mcp-client/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 512}
+{"ts": 1790463919.782, "ip": "198.51.100.45", "ua": "mcp-client/1.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 384}
+{"ts": 1790470146.817, "ip": "192.0.2.50", "ua": "GPTBot/1.0 (+https://openai.com/gptbot)", "method": "GET", "path": "/robots.txt", "status": 403, "note": "bot_ua:gptbot(banned)", "auth": "none", "clen": 0}
+{"ts": 1790515857.578, "ip": "203.0.113.40", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790515886.505, "ip": "203.0.113.41", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790515924.107, "ip": "203.0.113.42", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790515975.577, "ip": "203.0.113.43", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516016.503, "ip": "203.0.113.44", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516069.589, "ip": "203.0.113.45", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516108.456, "ip": "203.0.113.46", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516153.685, "ip": "203.0.113.47", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516165.976, "ip": "203.0.113.48", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516187.371, "ip": "203.0.113.49", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516211.84, "ip": "203.0.113.50", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516225.83, "ip": "203.0.113.51", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516247.47, "ip": "203.0.113.52", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516262.52, "ip": "203.0.113.53", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790516286.418, "ip": "203.0.113.54", "ua": "Mozilla/5.0 (compatible; scanner)", "method": "POST", "path": "/mcp", "status": 401, "note": "authfail", "auth": "bad", "clen": 46}
+{"ts": 1790519230.65, "ip": "192.0.2.51", "ua": "SemrushBot/7~bl", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:semrushbot", "auth": "none", "clen": 0}
+{"ts": 1790520049.55, "ip": "198.51.100.30", "ua": "DataForSeoBot/1.0", "method": "GET", "path": "/", "status": 403, "note": "bot_ua:dataforseobot", "auth": "none", "clen": 0}
+{"ts": 1790524982.283, "ip": "203.0.113.99", "ua": "Go-http-client/2.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "none", "clen": 46}
+{"ts": 1790524982.373, "ip": "203.0.113.99", "ua": "Go-http-client/2.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "none", "clen": 46}
+{"ts": 1790524982.563, "ip": "203.0.113.99", "ua": "Go-http-client/2.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "none", "clen": 46}
+{"ts": 1790524982.71, "ip": "203.0.113.99", "ua": "Go-http-client/2.0", "method": "POST", "path": "/mcp", "status": 429, "note": "rate_limited", "auth": "none", "clen": 46}
+{"ts": 1790524982.852, "ip": "203.0.113.99", "ua": "Go-http-client/2.0", "method": "POST", "path": "/mcp", "status": 429, "note": "rate_limited", "auth": "none", "clen": 46}
+{"ts": 1790533415.05, "ip": "198.51.100.45", "ua": "claude-code/1.2.0", "method": "POST", "path": "/mcp", "status": 200, "note": "", "auth": "valid", "clen": 1024}

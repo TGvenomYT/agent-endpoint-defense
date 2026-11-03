@@ -6,7 +6,7 @@ with its own bearer token and a fresh GUARDIAN_STATE_DIR per scenario, and
 writes results_<TAG>.json. The identical scenario set runs against both trees.
 """
 from __future__ import annotations
-import http.client, json, os, pathlib, platform, secrets, shutil, socket
+import base64, http.client, json, os, pathlib, platform, secrets, shutil, socket
 import statistics as st, subprocess, sys, time
 
 AT = pathlib.Path(os.environ["AT"]).expanduser()
@@ -632,6 +632,194 @@ def e6():
     }
 
 
+# ── E7: Bastion post-auth defense scenarios ──────────────────────────────────
+def e7():
+    R = {}
+    from agentkit import bastion
+
+    def _post(ip, body, token=TOKEN, host="127.0.0.1"):
+        c = http.client.HTTPConnection(host, PORT, timeout=10)
+        h = {"User-Agent": BENIGN_UA[0], "CF-Connecting-IP": ip,
+             "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        c.request("POST", "/mcp", body=body.encode() if isinstance(body, str) else body, headers=h)
+        r = c.getresponse(); raw = r.read(); c.close()
+        try:
+            return r.status, json.loads(raw)
+        except Exception:
+            return r.status, {}
+
+    def _err_code(body):
+        err = body.get("error")
+        return err.get("code") if isinstance(err, dict) else None
+
+    # S23: SQL injection — blocked before execution (no backend needed)
+    s = Server("s23", AGENTKIT_HTTP_DENY="", BASTION_INPUT_MODE="block")
+    st23, b23 = _post("198.51.100.70",
+                       rpc("tools/call", 1, {"name": "devops_ask",
+                           "arguments": {"message": "'; DROP TABLE users; --"}}))
+    sql_blocked = st23 == 200 and _err_code(b23) == -32003
+    s.stop()
+    # False-positive: unit test — natural language must not trigger
+    fp1 = bastion.check_input("devops_ask", {"message": "why is the database dropping connections?"})
+    fp2 = bastion.check_input("devops_ask", {"message": "the SELECT query is slow, help me optimize"})
+    fp3 = bastion.check_input("devops_ask", {"message": "how to drop a database connection pool?"})
+    R["S23_sql_injection"] = {"blocked": sql_blocked,
+                              "fp_drop_connections": fp1 is None,
+                              "fp_select_slow": fp2 is None,
+                              "fp_drop_pool": fp3 is None}
+
+    # S24: command injection — blocked for non-exempt, passed for exempt
+    s = Server("s24", AGENTKIT_HTTP_DENY="", BASTION_INPUT_MODE="block")
+    st24, b24 = _post("198.51.100.72",
+                       rpc("tools/call", 1, {"name": "devops_ask",
+                           "arguments": {"message": "; rm -rf /tmp/test"}}))
+    cmd_blocked = st24 == 200 and _err_code(b24) == -32003
+    s.stop()
+    # Exempt tool: unit test
+    exempt = bastion.check_input("shell_explain", {"command_or_error": "; rm -rf /tmp/test"})
+    R["S24_cmd_injection"] = {"blocked": cmd_blocked, "exempt_passed": exempt is None}
+
+    # S25: path traversal — blocked
+    s = Server("s25", AGENTKIT_HTTP_DENY="", BASTION_INPUT_MODE="block")
+    st25, b25 = _post("198.51.100.74",
+                       rpc("tools/call", 1, {"name": "devops_ask",
+                           "arguments": {"message": "read ../../../../etc/passwd"}}))
+    path_blocked = st25 == 200 and _err_code(b25) == -32003
+    R["S25_path_traversal"] = {"blocked": path_blocked}
+    s.stop()
+
+    # S26: oversized argument — blocked
+    s = Server("s26", AGENTKIT_HTTP_DENY="", BASTION_MAX_FIELD_SIZE="1024")
+    st26, b26 = _post("198.51.100.75",
+                       rpc("tools/call", 1, {"name": "devops_ask",
+                           "arguments": {"message": "x" * 2000}}))
+    oversize_blocked = st26 == 200 and _err_code(b26) == -32003
+    R["S26_oversize_arg"] = {"blocked": oversize_blocked, "field_bytes": 2000}
+    s.stop()
+
+    # S27: batch oversize — HTTP 400
+    s = Server("s27", AGENTKIT_HTTP_DENY="", BASTION_MAX_BATCH="5")
+    batch = [json.loads(rpc("tools/list", i)) for i in range(10)]
+    st27, _ = _post("198.51.100.76", json.dumps(batch))
+    batch_blocked = st27 == 400
+    small_batch = [json.loads(rpc("tools/list", i)) for i in range(3)]
+    st27b, _ = _post("198.51.100.77", json.dumps(small_batch))
+    small_ok = st27b == 200
+    R["S27_batch_oversize"] = {"blocked": batch_blocked, "small_batch_ok": small_ok}
+    s.stop()
+
+    # S28: enumeration detection — tools/list spam
+    s = Server("s28", AGENTKIT_HTTP_DENY="", BASTION_ENUM_MAX="5",
+               BASTION_BEHAVIOR_WINDOW="300")
+    enum_codes = []
+    for i in range(12):
+        st28, b28 = _post("198.51.100.78", rpc("tools/list", i))
+        if st28 == 200 and _err_code(b28) == -32004:
+            enum_codes.append("blocked")
+        else:
+            enum_codes.append("served")
+    R["S28_enumeration"] = {"total": 12, "served": enum_codes.count("served"),
+                            "blocked": enum_codes.count("blocked"),
+                            "detection_works": enum_codes.count("blocked") > 0}
+    s.stop()
+
+    # S29: output redaction — AWS key (unit test)
+    resp29 = {"jsonrpc": "2.0", "id": 1,
+              "result": {"content": [{"type": "text", "text":
+                  '{"config": {"aws_key": "AKIAIOSFODNN7EXAMPLE", "region": "us-east-1"}}'}],
+                  "isError": False}}
+    filtered29 = bastion.filter_output(resp29)
+    text29 = filtered29["result"]["content"][0]["text"]
+    aws_redacted = "[REDACTED:aws_key]" in text29 and "AKIAIOSFODNN7EXAMPLE" not in text29
+
+    # S30: output redaction — private key + JWT (unit test)
+    resp30 = {"jsonrpc": "2.0", "id": 2,
+              "result": {"content": [{"type": "text", "text":
+                  'key: -----BEGIN RSA PRIVATE KEY-----\nMIIE...'}],
+                  "isError": False}}
+    filtered30 = bastion.filter_output(resp30)
+    text30 = filtered30["result"]["content"][0]["text"]
+    pkey_redacted = "[REDACTED:private_key]" in text30
+
+    resp_jwt = {"jsonrpc": "2.0", "id": 3,
+                "result": {"content": [{"type": "text", "text":
+                    'token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'}],
+                    "isError": False}}
+    filtered_jwt = bastion.filter_output(resp_jwt)
+    text_jwt = filtered_jwt["result"]["content"][0]["text"]
+    jwt_redacted = "[REDACTED:jwt]" in text_jwt
+
+    # Clean text — no false redaction
+    resp_clean = {"jsonrpc": "2.0", "id": 4,
+                  "result": {"content": [{"type": "text", "text":
+                      '{"status": "healthy", "uptime": "42 days", "cpu": 23.5}'}],
+                      "isError": False}}
+    filtered_clean = bastion.filter_output(resp_clean)
+    clean_ok = "REDACTED" not in filtered_clean["result"]["content"][0]["text"]
+
+    R["S29_aws_key_redaction"] = {"redacted": aws_redacted}
+    R["S30_secret_redaction"] = {"private_key": pkey_redacted, "jwt": jwt_redacted,
+                                 "clean_passthrough": clean_ok}
+
+    return R
+
+
+def e9():
+    """E9: false-positive corpus (50 benign) + evasion suite (30 adversarial)."""
+    from fp_corpus import BENIGN, EVASION, run as fp_run
+    return fp_run()
+
+
+def e8():
+    """E8: honeytoken injection (S31–S32). Unit tests — toggle config, no server."""
+    R = {}
+    from agentkit import bastion
+
+    orig = config.BASTION_HONEYTOKEN
+    config.BASTION_HONEYTOKEN = "inject"
+
+    # S31: AWS key → honeytoken (not [REDACTED])
+    resp31 = {"jsonrpc": "2.0", "id": 1,
+              "result": {"content": [{"type": "text", "text":
+                  '{"aws_key": "AKIAIOSFODNN7EXAMPLE", "region": "us-east-1"}'}],
+                  "isError": False}}
+    filtered31 = bastion.filter_output(resp31, ip="10.0.0.1", tool="test")
+    text31 = filtered31["result"]["content"][0]["text"]
+    s31_pass = (
+        "AKIAIOSFODNN7EXAMPLE" not in text31       # original gone
+        and "AKIA" in text31                        # replaced with fake AKIA key
+        and "[REDACTED" not in text31               # NOT redaction-style
+    )
+    R["S31_honeytoken_aws"] = {"pass": s31_pass, "output": text31}
+
+    # S32: JWT → honeytoken with canary payload
+    jwt_orig = ("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0."
+                "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U")
+    resp32 = {"jsonrpc": "2.0", "id": 2,
+              "result": {"content": [{"type": "text", "text": f"token={jwt_orig}"}],
+                  "isError": False}}
+    filtered32 = bastion.filter_output(resp32, ip="10.0.0.1", tool="test")
+    text32 = filtered32["result"]["content"][0]["text"]
+    s32_pass = (
+        jwt_orig not in text32                      # original gone
+        and "eyJ" in text32                         # looks like a JWT
+        and "canary" in base64.b64decode(
+            text32.split("token=")[1].split(".")[1] + "=="
+        ).decode(errors="ignore")                   # payload has canary marker
+        and "[REDACTED" not in text32               # NOT redaction-style
+    )
+    R["S32_honeytoken_jwt"] = {"pass": s32_pass, "output": text32}
+
+    # Verify log file was written
+    import pathlib
+    ht_log = pathlib.Path.home() / ".agentkit" / "honeytokens.jsonl"
+    log_exists = ht_log.exists() and ht_log.stat().st_size > 0
+    R["honeytoken_log_written"] = log_exists
+
+    config.BASTION_HONEYTOKEN = orig
+    return R
+
+
 if __name__ == "__main__":
     t0 = time.time()
     from agentkit import config
@@ -640,11 +828,17 @@ if __name__ == "__main__":
                     "policy": {k: getattr(config, k) for k in dir(config)
                                if k.startswith("GUARDIAN_") and k not in ("GUARDIAN_BOT_UAS", "GUARDIAN_STATE_DIR")}}}
     res["meta"]["policy"]["bot_signatures"] = len(config.GUARDIAN_BOT_UAS)
+    res["meta"]["bastion"] = {k: getattr(config, k) for k in dir(config)
+                              if k.startswith("BASTION_") and k != "BASTION_EXEMPT_TOOLS"}
+    res["meta"]["bastion"]["exempt_tools"] = sorted(config.BASTION_EXEMPT_TOOLS)
     res["E1"] = e1(); print(TAG, "E1 done", flush=True)
     res["E2"] = e2(); print(TAG, "E2 done", flush=True)
     res["E3"] = e3(); print(TAG, "E3 done", flush=True)
     res["E4"] = e4(); print(TAG, "E4 done", flush=True)
     res["E5"] = e5(); print(TAG, "E5 done", flush=True)
     res["E6"] = e6(); print(TAG, "E6 done", flush=True)
+    res["E7"] = e7(); print(TAG, "E7 done", flush=True)
+    res["E8"] = e8(); print(TAG, "E8 done", flush=True)
+    res["E9"] = e9(); print(TAG, "E9 done", flush=True)
     res["meta"]["runtime_s"] = round(time.time() - t0, 1)
     (OUT / f"results_{TAG}.json").write_text(json.dumps(res, indent=2, default=str))

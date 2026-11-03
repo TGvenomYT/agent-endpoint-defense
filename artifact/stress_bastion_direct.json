@@ -1,0 +1,176 @@
+{
+  "tool_checked_as": "devops_ask",
+  "tool_used_in_stress": {
+    "H1_waf_bypass": {
+      "shell_explain": 100000
+    },
+    "H9_fp_stress": {
+      "shell_explain": 100000
+    },
+    "C10_bastion": {
+      "shell_explain": 100000
+    }
+  },
+  "categories": {
+    "C10_bastion": {
+      "benign_fp_test": {
+        "sent": 30000,
+        "blocked": 0,
+        "passed": 30000,
+        "distinct_payloads": 20,
+        "distinct_blocked": 0,
+        "passed_examples": [
+          "why is the database dropping connections?",
+          "the SELECT query is slow, help me optimize",
+          "show me the table of running containers",
+          "can you delete the old log files from /var/log?",
+          "update the DNS record for the staging server",
+          "execute the deployment script when CI passes",
+          "the union of these two data sources is what we need",
+          "select the right instance type for our workload"
+        ]
+      },
+      "cmdi": {
+        "sent": 23333,
+        "blocked": 16332,
+        "passed": 7001,
+        "distinct_payloads": 10,
+        "distinct_blocked": 7,
+        "passed_examples": [
+          "| whoami",
+          "&& ls -la /",
+          "| ping -c 3 evil.com"
+        ]
+      },
+      "sqli": {
+        "sent": 23334,
+        "blocked": 16333,
+        "passed": 7001,
+        "distinct_payloads": 10,
+        "distinct_blocked": 7,
+        "passed_examples": [
+          "admin'--",
+          "') OR ('1'='1",
+          "' OR ''='"
+        ]
+      },
+      "traversal": {
+        "sent": 23333,
+        "blocked": 23333,
+        "passed": 0,
+        "distinct_payloads": 7,
+        "distinct_blocked": 7,
+        "passed_examples": []
+      },
+      "_total": {
+        "sent": 100000,
+        "blocked": 55998,
+        "passed": 44002,
+        "distinct_payloads": 47,
+        "distinct_blocked": 21
+      }
+    },
+    "H1_waf_bypass": {
+      "cmdi_bypass": {
+        "sent": 28980,
+        "blocked": 24633,
+        "passed": 4347,
+        "distinct_payloads": 20,
+        "distinct_blocked": 17,
+        "passed_examples": [
+          "&&id||whoami",
+          "| python3 -c 'import os;os.system(\"id\")'",
+          ";a]a]a;id"
+        ]
+      },
+      "polyglot": {
+        "sent": 7245,
+        "blocked": 7245,
+        "passed": 0,
+        "distinct_payloads": 5,
+        "distinct_blocked": 5,
+        "passed_examples": []
+      },
+      "sqli_bypass": {
+        "sent": 28999,
+        "blocked": 27549,
+        "passed": 1450,
+        "distinct_payloads": 20,
+        "distinct_blocked": 19,
+        "passed_examples": [
+          "1 aND 1=1"
+        ]
+      },
+      "sqli_double_enc": {
+        "sent": 4347,
+        "blocked": 2898,
+        "passed": 1449,
+        "distinct_payloads": 3,
+        "distinct_blocked": 2,
+        "passed_examples": [
+          "%252f%252a%252a%252f"
+        ]
+      },
+      "sqli_unicode": {
+        "sent": 10143,
+        "blocked": 7245,
+        "passed": 2898,
+        "distinct_payloads": 7,
+        "distinct_blocked": 5,
+        "passed_examples": [
+          "' \u0d4eR 1=1 --",
+          "'\u200bOR\u200b1=1--"
+        ]
+      },
+      "traversal_bypass": {
+        "sent": 20286,
+        "blocked": 17388,
+        "passed": 2898,
+        "distinct_payloads": 14,
+        "distinct_blocked": 12,
+        "passed_examples": [
+          "..%c1%9c..%c1%9cetc/passwd",
+          "%252e%252e%252f%252e%252e%252f"
+        ]
+      },
+      "_total": {
+        "sent": 100000,
+        "blocked": 86958,
+        "passed": 13042,
+        "distinct_payloads": 69,
+        "distinct_blocked": 60
+      }
+    },
+    "H9_fp_stress": {
+      "tricky_benign": {
+        "sent": 100000,
+        "blocked": 6667,
+        "passed": 93333,
+        "distinct_payloads": 45,
+        "distinct_blocked": 3,
+        "passed_examples": [
+          "Can you select all the containers that dropped connections?",
+          "We need to union the two monitoring dashboards",
+          "Please drop me a summary of the database performance",
+          "Delete the old log rotation config and update it",
+          "Insert a new cron job for the backup script",
+          "Execute the health check and show me the table of results",
+          "I want to alter the nginx configuration for the staging server",
+          "Create a new user account for the DevOps team"
+        ]
+      },
+      "_total": {
+        "sent": 100000,
+        "blocked": 6667,
+        "passed": 93333,
+        "distinct_payloads": 45,
+        "distinct_blocked": 3
+      }
+    }
+  },
+  "exempt_in_stress": [
+    "shell_explain",
+    "shell_recall",
+    "shell_suggest"
+  ]
+}

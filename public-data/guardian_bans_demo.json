@@ -1,0 +1,18 @@
+{
+  "203.0.113.10": {
+    "until": 1790434800.0,
+    "reason": "authfail"
+  },
+  "203.0.113.20": {
+    "until": 1790435100.0,
+    "reason": "pathscan"
+  },
+  "192.0.2.50": {
+    "until": 1790431200.0,
+    "reason": "bot_ua:gptbot"
+  },
+  "192.0.2.51": {
+    "until": 1790431500.0,
+    "reason": "bot_ua:claudebot"
+  }
+}
